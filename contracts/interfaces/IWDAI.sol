@@ -1,9 +1,10 @@
 pragma solidity ^0.7.0;
+import "./IERC20.sol";
 
 interface IWDAI {
     event Transfer(address indexed _from, address indexed _to, uint256 _value);
     event Approval(address indexed _owner, address indexed _spender, uint256 _value);
-
+    function wrappedToken() external view returns (IERC20);
     function totalSupply() external view returns (uint256);
     function balanceOf(address _account) external view returns (uint256);
     function transfer(address _recipient, uint256 _amount) external returns (bool);
@@ -13,6 +14,7 @@ interface IWDAI {
     function burn(uint256 _value) external returns (bool);
 
     function deposit(uint256 _amount) external;
+    function withdraw(uint256 _amount) external;
 
     function name() external view returns (string memory);
     function symbol() external view returns (string memory);
