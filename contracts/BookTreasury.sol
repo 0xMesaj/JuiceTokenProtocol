@@ -72,9 +72,6 @@ contract BookTreasury {
         path[0] = address(WDAI);
         path[1] = address(BOOK);
         router.swapExactTokensForTokensSupportingFeeOnTransferTokens(WDAI.balanceOf(address(this)), 0, path, address(this), 2000000000000000000000);
-        // console.log("Locked Liq res=%s",BookLiqCalculator.calculateSubFloor(DAI,address(WDAI)));
-        console.log("Burning %s Book Token", BOOK.balanceOf(address(this)) );
         BOOK.burn(BOOK.balanceOf(address(this)));
-        // console.log("Post Book Burn Locked Liq res=%s",BookLiqCalculator.calculateSubFloor(DAI,address(WDAI)));
     }
 }
