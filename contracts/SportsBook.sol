@@ -92,8 +92,7 @@ contract SportsBook is ChainlinkClient  {
     int256 MAX_BET;
     IERC20 dai;
 
-    constructor (IERC20 _DAI, address _treasury) public payable{
-    // constructor () public{      
+    constructor (IERC20 _DAI, address _treasury) public payable{ 
         treasury = _treasury;
         wards[msg.sender] = true;
         setPublicChainlinkToken();
@@ -176,8 +175,6 @@ contract SportsBook is ChainlinkClient  {
         }
     }
     
-   
-    
     function resolveParlay( bytes16 _betRef ) public {
         Parlay memory p = parlays[_betRef];
         require(p.creator != address(0x0), "Invalid Bet Reference");
@@ -192,11 +189,10 @@ contract SportsBook is ChainlinkClient  {
             if(ans == 0){
                 win = false;
             }
-            else if(ans == 2 || p.timestamp>matchCancellationTimestamp[uint256(stringtoBytes32(p.indexes[i])])){
+            else if(ans == 2 || p.timestamp>matchCancellationTimestamp[uint256(stringtoBytes32(p.indexes[i]))]){
                 os[i] = '100'.toSlice();
             }
-        }
-        
+        }     
         if(win){
             int256 odds = calculateParlayOdds(strings.join(','.toSlice(),os));
             if (odds > 0) {
@@ -208,39 +204,6 @@ contract SportsBook is ChainlinkClient  {
         }
     }
     
-    function fetchFinalScore( string memory _index ) public {
-        Chainlink.Request memory req =  buildChainlinkRequest(stringToBytes32('9de0f2eae1104a248ddd327624360d7a'), address(this), this.fulfillScores.selector);
-        req.add("type", 'score');
-        req.addUint('index', _index);
-        _queryID = sendChainlinkRequestTo(oracle, req, ORACLE_PAYMENT);
-        queriedIndexes[_queryID] = _index;
-    }
-
-    function checkMatchStatus ( uint256 _index ) public {
-        Chainlink.Request memory req = buildChainlinkRequest(stringToBytes32('7bbb3ac4ff634d67a0413f8540bf9af6'), address(this), thisfulfillStatus.selector);
-        req.add('index', _index);
-        _queryID = sendChainlinkRequestTo(oracle, req, ORACLE_PAYMENT);
-        queriedStatus[_queryID] = _index;
-    }
-
-    function buildBet( uint256 _index, uint256 _selection, int256 _rule) internal returns (bytes32 _queryID){
-        Chainlink.Request memory req =  buildChainlinkRequest(stringToBytes32('8b47ea9ea0594c4e9ec88f616abd57b9'), address(this), this.fulfillBetOdds.selector);
-        req.add('type', 'straight');
-        req.addUint('index', _index);
-        req.addUint('selection', _selection);
-        req.addInt('rule', _rule);
-        _queryID = sendChainlinkRequestTo(oracle, req, ORACLE_PAYMENT);
-    }
-    
-    function buildParlay(string memory _indexes, string memory _selections, string memory _rules) internal returns (bytes32 _queryID){
-        Chainlink.Request memory req = buildChainlinkRequest(stringToBytes32('2a0c4bdfe815406eba8ecdee3cbcc2ee'), address(this), this.fulfillParlayOdds.selector);
-        req.add('type', 'parlay');
-        req.add('index', _indexes);
-        req.add('selection', _selections);
-        req.add('rule', _rules);
-        _queryID = sendChainlinkRequestTo(oracle, req, ORACLE_PAYMENT);
-    } 
-
     /* Claim refund from declined bet */
     function claimRefund() external{
         uint256 amt = refund[msg.sender];
@@ -249,11 +212,14 @@ contract SportsBook is ChainlinkClient  {
         dai.transferFrom(treasury,msg.sender,amt);
     }
 
-    /* Refund bet if match has a valid cancelation timestamp after the bet
-        was placed */
+    /* 
+        Refund bet if match has a valid cancelation timestamp after the bet
+        was placed - Used in cases of match cancellation/postponement
+     */
     function refundBet( bytes16 betRef) external {
         Bet b = bets[betRef];
-        if(b.timestamp < matchCancellationTimestamp[b.index]){
+        uint256 timestamp = matchCancellationTimestamp[b.index];
+        if(b.timestamp < timestamp){
             uint256 amt = b.amt;
             address refundee = b.creator;
             delete bets[betRef];
@@ -343,6 +309,40 @@ contract SportsBook is ChainlinkClient  {
             dai.transferFrom(treasury,creator,amt);
         }
     }
+
+    /* Requesters */
+    function fetchFinalScore( string memory _index ) public {
+        Chainlink.Request memory req =  buildChainlinkRequest(stringToBytes32('9de0f2eae1104a248ddd327624360d7a'), address(this), this.fulfillScores.selector);
+        req.add("type", 'score');
+        req.addUint('index', _index);
+        _queryID = sendChainlinkRequestTo(oracle, req, ORACLE_PAYMENT);
+        queriedIndexes[_queryID] = _index;
+    }
+
+    function checkMatchStatus ( uint256 _index ) public {
+        Chainlink.Request memory req = buildChainlinkRequest(stringToBytes32('7bbb3ac4ff634d67a0413f8540bf9af6'), address(this), thisfulfillStatus.selector);
+        req.add('index', _index);
+        _queryID = sendChainlinkRequestTo(oracle, req, ORACLE_PAYMENT);
+        queriedStatus[_queryID] = _index;
+    }
+
+    function buildBet( uint256 _index, uint256 _selection, int256 _rule) internal returns (bytes32 _queryID){
+        Chainlink.Request memory req =  buildChainlinkRequest(stringToBytes32('8b47ea9ea0594c4e9ec88f616abd57b9'), address(this), this.fulfillBetOdds.selector);
+        req.add('type', 'straight');
+        req.addUint('index', _index);
+        req.addUint('selection', _selection);
+        req.addInt('rule', _rule);
+        _queryID = sendChainlinkRequestTo(oracle, req, ORACLE_PAYMENT);
+    }
+    
+    function buildParlay(string memory _indexes, string memory _selections, string memory _rules) internal returns (bytes32 _queryID){
+        Chainlink.Request memory req = buildChainlinkRequest(stringToBytes32('2a0c4bdfe815406eba8ecdee3cbcc2ee'), address(this), this.fulfillParlayOdds.selector);
+        req.add('type', 'parlay');
+        req.add('index', _indexes);
+        req.add('selection', _selections);
+        req.add('rule', _rules);
+        _queryID = sendChainlinkRequestTo(oracle, req, ORACLE_PAYMENT);
+    } 
     
     /* Fulfillers */
     function fulfillStatus(bytes32 _requestId, bool status) public isOracle() {
@@ -454,8 +454,8 @@ contract SportsBook is ChainlinkClient  {
         delete queriedIndexes[_requestId];
     }
 
-    /* UTILITIES */
-     function calculateParlayOdds(string memory _o) internal view returns (int256 odds){
+    /* Utilities */
+     function calculateParlayOdds(string memory _o) internal pure returns (int256 odds){
         strings.slice memory o = _o.toSlice();
         strings.slice memory delim = ",".toSlice();
         string[] memory os = new string[](o.count(delim) + 1);
@@ -468,19 +468,19 @@ contract SportsBook is ChainlinkClient  {
     function safeMultiply(uint256 b, int256 a) internal pure returns (uint256) {
         if (a == 0) {return 0;}
         uint256 c = uint256(a) * b;
-        require(c / uint256(a) == b, "Multiplication Error");
+        require(c / uint256(a) == b, "Sorry, multiplication is hard...");
         return c;
-    }s
+    }
     
     function safeDivide(uint256 a, int256 b) internal pure returns (uint256) {
-        require(b > 0, "Bad Division");
+        require(b > 0, "Sorry, division is hard...");
         uint256 c = a / uint256(b);
         return c;
     }
 
     function safeAdd(uint256 a, uint256 b) internal pure returns (uint256) {
         uint256 c = a + b;
-        require(c >= a, "SafeMath: addition overflow");
+        require(c >= a, "Sorry, addition is hard...");
         return c;
     }
       
