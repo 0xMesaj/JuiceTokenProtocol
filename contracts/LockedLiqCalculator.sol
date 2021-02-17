@@ -45,8 +45,9 @@ contract LockedLiqCalculator is ILockedLiqCalculator{
         uint256 currentBacking = wrappedToken.balanceOf(address(backingToken));
         if (requiredBacking >= currentBacking) { return 0; }
 
-        uint bRes = BOOK.balanceOf(address(pair));
-        uint wRes = IERC20(backingToken).balanceOf(address(pair));
+        // uint bRes = BOOK.balanceOf(address(pair));
+        // uint wRes = IERC20(backingToken).balanceOf(address(pair));
+        
         // console.log("sellAllProceeds= %s",sellAllProceeds);
         // console.log("backingInPool= %s",backingInPool);
         // console.log("backing token total supply= %s",IERC20(backingToken).totalSupply());
