@@ -163,7 +163,8 @@ contract SportsBook is ChainlinkClient  {
     function resolveMatch( bytes16 _betRef ) public {
         Bet memory b = bets[_betRef];
         require(b.creator != address(0x0), "Invalid Bet Reference");
-        
+        require(b.timestamp>matchCancellationTimestamp[b.index], 'Match is invalid');
+
         if(computeResult(b.index,b.selection,b.rule) == 1){
             //transfer win amount to b.creator
             if (b.odds > 0) {
@@ -175,15 +176,7 @@ contract SportsBook is ChainlinkClient  {
         }
     }
     
-    function calculateParlayOdds(string memory _o) internal view returns (int256 odds){
-        strings.slice memory o = _o.toSlice();
-        strings.slice memory delim = ",".toSlice();
-        string[] memory os = new string[](o.count(delim) + 1);
-        for(uint i=0;i < os.length; i++){
-            odds += int256(stringToBytes32(os[i]));
-        }
-        return(odds > 2 ? (odds-1)*100 : (-100)/(odds-1));
-    }
+   
     
     function resolveParlay( bytes16 _betRef ) public {
         Parlay memory p = parlays[_betRef];
@@ -199,18 +192,18 @@ contract SportsBook is ChainlinkClient  {
             if(ans == 0){
                 win = false;
             }
-            else if(ans == 2){
+            else if(ans == 2 || p.timestamp>matchCancellationTimestamp[uint256(stringtoBytes32(p.indexes[i])])){
                 os[i] = '100'.toSlice();
             }
         }
-        string memory odds = strings.join(','.toSlice(),os);
+        
         if(win){
-            int256 _odds = calculateParlayOdds(odds);
-            if (_odds > 0) {
-                DAI.transfer(p.creator, safeMultiply(p.amount, _odds/100));
+            int256 odds = calculateParlayOdds(strings.join(','.toSlice(),os));
+            if (odds > 0) {
+                DAI.transfer(p.creator, safeMultiply(p.amount, odds/100));
             }
             else{
-                DAI.transfer(p.creator,  safeDivide(p.amount,_odds/-100));
+                DAI.transfer(p.creator,  safeDivide(p.amount,odds/-100));
             }
         }
     }
@@ -462,13 +455,22 @@ contract SportsBook is ChainlinkClient  {
     }
 
     /* UTILITIES */
+     function calculateParlayOdds(string memory _o) internal view returns (int256 odds){
+        strings.slice memory o = _o.toSlice();
+        strings.slice memory delim = ",".toSlice();
+        string[] memory os = new string[](o.count(delim) + 1);
+        for(uint i=0;i < os.length; i++){
+            odds += int256(stringToBytes32(os[i]));
+        }
+        return(odds > 2 ? (odds-1)*100 : (-100)/(odds-1));
+    }
+
     function safeMultiply(uint256 b, int256 a) internal pure returns (uint256) {
         if (a == 0) {return 0;}
         uint256 c = uint256(a) * b;
         require(c / uint256(a) == b, "Multiplication Error");
         return c;
-    }
-    
+    }s
     
     function safeDivide(uint256 a, int256 b) internal pure returns (uint256) {
         require(b > 0, "Bad Division");
