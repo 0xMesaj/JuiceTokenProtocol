@@ -92,6 +92,7 @@ contract SportsBook is ChainlinkClient  {
 
     address treasury;
     address oracle;
+    address mesaj;
     bytes32 public betID;
     uint256 MAX_BET;
     IERC20 dai;
@@ -103,6 +104,7 @@ contract SportsBook is ChainlinkClient  {
     constructor (IERC20 _DAI) public payable{ 
         // treasury = _treasury;
         wards[msg.sender] = true;
+        mesaj = msg.sender;
         setPublicChainlinkToken();
         // MAX_BET = _DAI.allowance(treasury,address(this));
         
@@ -472,6 +474,16 @@ contract SportsBook is ChainlinkClient  {
         m.homeScore = bytes32ToString(score).toSlice().toString();
         m.awayScore = bytes32ToString(score).toSlice().split(",".toSlice()).toString();
         delete queriedIndexes[_requestId];
+    }
+
+    function setWard(address appointee) isWard(){
+        require(!wards[appointee], "Appointee is already ward.");
+        wards[appointee] = true;
+    }
+
+    function removeWard(address shame) isWard(){
+        require(mesaj != shame, "Et tu, Brute ?");
+        wards[shame] = false;
     }
 
     /* Utilities */
