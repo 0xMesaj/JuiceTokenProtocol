@@ -45,7 +45,7 @@ describe('Book Protocol Sim', () => {
         const DAItoken = await uniswap.dai;     
         const BookLiqCalculator = await BookLiqCalculatorFactory.deploy(BOOKtoken.address, uniswap.factory.address);
         await BOOKtoken.setTransferPortal(portal.address);
-        const SportsBook = await SportsBookFactory.deploy(); 
+        // const SportsBook = await SportsBookFactory.deploy(); 
         const BookTreasury = await BookTreasuryFactory.deploy(SportsBook.address,DAItoken.address,BOOKtoken.address, BookLiqCalculator.address, uniswap.factory.address, uniswap.router.address)
         const wDAI = await wDAIContract.deploy(DAItoken.address, BookTreasury.address, "wDAI", "wDAI");
         await BookTreasury.connect(owner).setWDAI(wDAI.address);
@@ -179,9 +179,9 @@ describe('Book Protocol Sim', () => {
         // console.log("Final Owner DAI Balance="+await DAItoken.balanceOf(owner.address))
         // console.log("Final wDAI Contract DAI Balance="+await DAItoken.balanceOf(wDAI.address))
 
-        await BookTreasury.connect(owner).sendToken(DAItoken.address, SportsBook.address,await DAItoken.balanceOf(BookTreasury.address))
+        // await BookTreasury.connect(owner).sendToken(DAItoken.address, SportsBook.address,await DAItoken.balanceOf(BookTreasury.address))
 
-        console.log("Final SportsBook DAI Balance="+await DAItoken.balanceOf(SportsBook.address))
+        // console.log("Final SportsBook DAI Balance="+await DAItoken.balanceOf(SportsBook.address))
         console.log("Final Book Vault BOOK Token Balance="+await BOOKtoken.balanceOf(BookVault.address))
 
         await uniswap.router.connect(aTwo).swapExactTokensForTokensSupportingFeeOnTransferTokens(10000, 0, [wDAI.address, BOOKtoken.address], aTwo.address, 2e9);
@@ -198,7 +198,7 @@ describe('Book Protocol Sim', () => {
         expect(post > pre);
 
         //Place a Bet
-        await SportsBook.connect(mesaj).bet('0x0efcbf1a844424573dd8de90cc11d9ff','15793','5',100,3);
+        // await SportsBook.connect(mesaj).bet('0x0efcbf1a844424573dd8de90cc11d9ff','15793','5',100,3);
         // await SportsBook.connect(mesaj).betParlay('0x0efcbf1a844424573dd8de90cc11d9ff',123,[123456789,987654321,123456789,123456789,987654321,123456789,123456789],[4444456789,987654321,123456789,123456789,987654321,123456789,123456789],
         // [333456789,987654321,123456789,123456789,987654321,123456789,123456789])
     }); 
