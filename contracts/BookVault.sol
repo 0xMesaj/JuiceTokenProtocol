@@ -1,10 +1,5 @@
 pragma solidity ^0.7.0;
 
-/*
-From https://raw.githubusercontent.com/sushiswap/sushiswap/master/contracts/MasterChef.sol
-Except a million times better
-*/
-
 import "./interfaces/IERC20.sol";
 import "./SafeMath.sol";
 import "./SafeERC20.sol";
@@ -44,7 +39,7 @@ contract BookVault{
     uint256 public totalAllocationPoints;
 
     mapping (IERC20 => bool) existingPools;
-    uint256 constant maxPoolCount = 20; // to simplify things and ensure massUpdatePools is safe
+    uint256 constant maxPoolCount = 20;
     uint256 totalReward;
     uint256 lastRewardBalance;
 

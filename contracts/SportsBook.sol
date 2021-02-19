@@ -176,10 +176,10 @@ contract SportsBook is ChainlinkClient  {
         if(computeResult(b.index,b.selection,b.rule) == 1){
             //transfer win amount to b.creator
             if (b.odds > 0) {
-                dai.transfer(b.creator, safeMultiply(b.amount,b.odds/100)*10e18);
+                dai.transfer(b.creator, safeMultiply(b.amount,b.odds/100));
             }
             else{
-                dai.transfer(b.creator, safeDivide(b.amount,(b.odds/-100))*10e18);
+                dai.transfer(b.creator, safeDivide(b.amount,(b.odds/-100)));
             }
         }
     }
@@ -205,10 +205,10 @@ contract SportsBook is ChainlinkClient  {
         if(win){
             int256 odds = calculateParlayOdds(strings.join(','.toSlice(),os));
             if (odds > 0) {
-                dai.transfer(p.creator, safeMultiply(p.amount, odds/100)*10e18);
+                dai.transfer(p.creator, safeMultiply(p.amount, odds/100));
             }
             else{
-                dai.transfer(p.creator,  safeDivide(p.amount,odds/-100)*10e18);
+                dai.transfer(p.creator,  safeDivide(p.amount,odds/-100));
             }
         }
     }
@@ -219,7 +219,7 @@ contract SportsBook is ChainlinkClient  {
         require(amt > 0, "No refund to claim");
         refund[msg.sender] = 0;
         // dai.transferFrom(treasury,msg.sender,amt);
-        dai.transfer(msg.sender,amt*10e18);
+        dai.transfer(msg.sender,amt);
     }
 
     /* 
@@ -234,7 +234,7 @@ contract SportsBook is ChainlinkClient  {
             address refundee = b.creator;
             delete bets[_betID];
             // dai.transferFrom(treasury,refundee,amt);
-            dai.transfer(msg.sender,amt*10e18);
+            dai.transfer(msg.sender,amt);
         }
     }
     
@@ -242,7 +242,7 @@ contract SportsBook is ChainlinkClient  {
         bytes32 _queryID = buildBet(_index, _selection, _rule);
         
         if(_queryID != 0x0){
-            dai.transferFrom(msg.sender,address(this),_wagerAmt*10e18);
+            dai.transferFrom(msg.sender,address(this),_wagerAmt);
         }
         
         Bet storage b = bets[_queryID];
@@ -382,54 +382,53 @@ contract SportsBook is ChainlinkClient  {
         address creator = b.creator;
         uint256 amt = b.amount;
         uint256 potential = 0;
-        if(_odds > 0){
-            potential = safeMultiply(amt,(_odds/100));
-            check = 2;
-        }
-        else{
-            potential = safeDivide(amt, (_odds/-100));
-            check = 3;
-        }
-        Risk memory risk = sportsBookRisk[b.index];
+        // if(_odds > 0){
+        //     potential = safeMultiply(amt,_odds)/100;
+        // }
+        // else{
+        //     potential = safeDivide(amt,-1*_odds)/100;
+        // }
+        potential = (_odds > 0 ? safeMultiply(amt,_odds)/100 : safeDivide(amt,-1*_odds)/100);
+        Risk storage risk = sportsBookRisk[b.index];
         if(b.selection == 0){
-            risk.spreadDelta.outcome0PotentialWin = potential.add(risk.spreadDelta.outcome0PotentialWin);
-            risk.spreadDelta.outcome0Wagered = safeAdd(b.amount,risk.spreadDelta.outcome0Wagered);
-            if(risk.spreadDelta.outcome0PotentialWin-risk.spreadDelta.outcome1Wagered > MAX_BET || (_odds<100 && _odds>-100)){
+            if(risk.spreadDelta.outcome0PotentialWin.add(potential).sub(risk.spreadDelta.outcome1Wagered) > MAX_BET || (_odds<100 && _odds>-100)){
                 delete bets[_requestId];
                 refund[creator] = safeAdd(amt,refund[creator]);
             }
             else{
+                risk.spreadDelta.outcome0PotentialWin = potential.add(risk.spreadDelta.outcome0PotentialWin);
+                risk.spreadDelta.outcome0Wagered = safeAdd(amt,risk.spreadDelta.outcome0Wagered);
                 b.odds = _odds;
                 emit BetAccepted(_requestId,_odds);
             }
         }
         else if(b.selection == 1){
-            risk.spreadDelta.outcome1PotentialWin = safeAdd(potential,risk.spreadDelta.outcome1PotentialWin);
-            risk.spreadDelta.outcome1Wagered = safeAdd(b.amount,risk.spreadDelta.outcome1Wagered);
-            if(risk.spreadDelta.outcome1PotentialWin-risk.spreadDelta.outcome0Wagered > MAX_BET || (_odds<100 && _odds>-100)){
+            if(risk.spreadDelta.outcome1PotentialWin.add(potential).sub(risk.spreadDelta.outcome0Wagered) > MAX_BET || (_odds<100 && _odds>-100)){
                 delete bets[_requestId];
                 refund[creator] = safeAdd(amt,refund[creator]);
             }
             else{
+                risk.spreadDelta.outcome1PotentialWin = safeAdd(potential,risk.spreadDelta.outcome1PotentialWin);
+                risk.spreadDelta.outcome1Wagered = safeAdd(amt,risk.spreadDelta.outcome1Wagered);
                 b.odds = _odds;
                 emit BetAccepted(_requestId,_odds);
             }
         }
         else if(b.selection == 2){
-            risk.pointDelta.outcome0PotentialWin = safeAdd(potential,risk.pointDelta.outcome0PotentialWin);
-            risk.pointDelta.outcome0Wagered = safeAdd(b.amount,risk.pointDelta.outcome0Wagered);
-            if(risk.pointDelta.outcome0PotentialWin-risk.pointDelta.outcome1Wagered > MAX_BET || (_odds<100 && _odds>-100)){
+            if(risk.pointDelta.outcome0PotentialWin.add(potential).sub(risk.pointDelta.outcome1Wagered) > MAX_BET || (_odds<100 && _odds>-100)){
                 delete bets[_requestId];
                 refund[creator] = safeAdd(amt,refund[creator]);
             }
             else{
+                risk.pointDelta.outcome0PotentialWin = safeAdd(potential,risk.pointDelta.outcome0PotentialWin);
+                risk.pointDelta.outcome0Wagered = safeAdd(amt,risk.pointDelta.outcome0Wagered);
                 b.odds = _odds;
                 emit BetAccepted(_requestId,_odds);
             }
         }
         else if(b.selection == 3){
             risk.pointDelta.outcome1PotentialWin = safeAdd(potential,risk.pointDelta.outcome1PotentialWin);
-            risk.pointDelta.outcome1Wagered = safeAdd(b.amount,risk.pointDelta.outcome1Wagered);
+            risk.pointDelta.outcome1Wagered = safeAdd(amt,risk.pointDelta.outcome1Wagered);
             if(risk.pointDelta.outcome1PotentialWin-risk.pointDelta.outcome0Wagered > MAX_BET || (_odds<100 && _odds>-100)){
                 delete bets[_requestId];
                 refund[creator] = safeAdd(amt,refund[creator]);
@@ -441,7 +440,7 @@ contract SportsBook is ChainlinkClient  {
         }
         else if(b.selection == 4){
             risk.moneylineDelta.outcome0PotentialWin = safeAdd(potential,risk.moneylineDelta.outcome0PotentialWin);
-            risk.moneylineDelta.outcome0Wagered = safeAdd(b.amount,risk.moneylineDelta.outcome0Wagered);
+            risk.moneylineDelta.outcome0Wagered = safeAdd(amt,risk.moneylineDelta.outcome0Wagered);
             if(risk.moneylineDelta.outcome0PotentialWin-risk.moneylineDelta.outcome1Wagered > MAX_BET || (_odds<100 && _odds>-100)){
                 check = 4;
                 delete bets[_requestId];
@@ -455,7 +454,7 @@ contract SportsBook is ChainlinkClient  {
         }
         else if(b.selection == 5){
             risk.moneylineDelta.outcome1PotentialWin = safeAdd(potential,risk.moneylineDelta.outcome1PotentialWin);
-            risk.moneylineDelta.outcome1Wagered = safeAdd(b.amount,risk.moneylineDelta.outcome1Wagered);
+            risk.moneylineDelta.outcome1Wagered = safeAdd(amt,risk.moneylineDelta.outcome1Wagered);
             if(risk.moneylineDelta.outcome1PotentialWin-risk.moneylineDelta.outcome0Wagered > MAX_BET || (_odds<100 && _odds>-100)){
                 delete bets[_requestId];
                 refund[creator] = safeAdd(amt,refund[creator]);
