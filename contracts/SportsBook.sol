@@ -92,7 +92,6 @@ contract SportsBook is ChainlinkClient  {
 
     address treasury;
     address oracle;
-    address mesaj;
     bytes32 public betID;
     uint256 MAX_BET;
     IERC20 dai;
@@ -104,7 +103,6 @@ contract SportsBook is ChainlinkClient  {
     constructor (IERC20 _DAI) public payable{ 
         // treasury = _treasury;
         wards[msg.sender] = true;
-        mesaj = msg.sender;
         setPublicChainlinkToken();
         // MAX_BET = _DAI.allowance(treasury,address(this));
         
@@ -468,22 +466,17 @@ contract SportsBook is ChainlinkClient  {
             }
         }
     }
-
+    
     function fulfillScores(bytes32 _requestId, bytes32 score) public isOracle() recordChainlinkFulfillment(_requestId){
-        MatchScores memory m = matchResults[queriedIndexes[_requestId]];
-        m.homeScore = bytes32ToString(score).toSlice().toString();
-        m.awayScore = bytes32ToString(score).toSlice().split(",".toSlice()).toString();
+        require(score != 0x0, "Invalid Response");
+        strings.slice memory s = bytes32ToString(score).toSlice();
+        strings.slice memory part;
+        MatchScores storage m = matchResults[queriedIndexes[_requestId]];
+        m.homeScore = s.split(",".toSlice(), part).toString();
+        m.awayScore = s.split(",".toSlice(), part).toString();
+        m.recorded = true;
+        
         delete queriedIndexes[_requestId];
-    }
-
-    function setWard(address appointee) isWard(){
-        require(!wards[appointee], "Appointee is already ward.");
-        wards[appointee] = true;
-    }
-
-    function removeWard(address shame) isWard(){
-        require(mesaj != shame, "Et tu, Brute ?");
-        wards[shame] = false;
     }
 
     /* Utilities */
