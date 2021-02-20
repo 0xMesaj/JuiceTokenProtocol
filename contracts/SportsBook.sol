@@ -172,16 +172,22 @@ contract SportsBook is ChainlinkClient  {
     
     function resolveMatch( bytes32 _betID ) public {
         Bet memory b = bets[_betID];
-        require(b.creator != address(0x0), "Invalid Bet Reference");
+        require(_betID != address(0x0), "Invalid Bet Reference");
         require(b.timestamp>matchCancellationTimestamp[b.index], 'Match is invalid');
 
         if(computeResult(b.index,b.selection,b.rule) == 1){
+            uint256 amt = b.amount;
+            int256 odds = b.odds;
+            address creator = b.creator;
+
             //transfer win amount to b.creator
-            if (b.odds > 0) {
-                dai.transfer(b.creator, safeMultiply(b.amount,b.odds/100));
+            if (odds > 0) {
+                delete bets[_betID];
+                dai.transfer(creator, safeMultiply(amt,odds)/100);
             }
             else{
-                dai.transfer(b.creator, safeDivide(b.amount,(b.odds/-100)));
+                delete bets[_betID];
+                dai.transfer(b.creator, safeDivide(amt,(-1*odds)/-100));
             }
         }
     }
@@ -206,11 +212,16 @@ contract SportsBook is ChainlinkClient  {
         }     
         if(win){
             int256 odds = calculateParlayOdds(strings.join(','.toSlice(),os));
+            uint256 amt = p.amount;
+            address creator = p.creator;
+
             if (odds > 0) {
-                dai.transfer(p.creator, safeMultiply(p.amount, odds/100));
+                delete parlays[_betID];
+                dai.transfer(creator, safeMultiply(amt,odds)/100);
             }
             else{
-                dai.transfer(p.creator,  safeDivide(p.amount,odds/-100));
+                delete parlays[_betID];
+                dai.transfer(creator, safeDivide(amt,(-1*odds)/-100));
             }
         }
     }
@@ -328,7 +339,7 @@ contract SportsBook is ChainlinkClient  {
         }
     }
 
-    function setSportsBookState(bool state) isWard(){
+    function setSportsBookState(bool state) public isWard(){
         allowWagers = state;
     }
 
@@ -338,7 +349,7 @@ contract SportsBook is ChainlinkClient  {
     }
 
     function removeWard(address shame) public isWard(){
-        require(mesaj != shame, "Et tu, Brute ?");
+        require(mesaj != shame, "Et tu, Brute?");
         wards[shame] = false;
     }
 
