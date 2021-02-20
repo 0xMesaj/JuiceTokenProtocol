@@ -12,12 +12,10 @@ import 'hardhat/console.sol';
 contract BookTreasury {
     using SafeERC20 for IERC20;
 
-    address owner;
-
-    address pair;
     mapping(address => bool) public strategies;
     mapping(address => bool) public treasurers;
 
+    address mesaj;
     IBookToken BOOK;
     IERC20 DAI;
     IWDAI WDAI;
@@ -25,47 +23,43 @@ contract BookTreasury {
     IUniswapV2Router02 router;
     ILockedLiqCalculator BookLiqCalculator;
 
-    modifier ownerOnly(){
-        require (msg.sender == owner, "Owner only");
+    modifier isTreasurer(){
+        require (treasurers[msg.sender], "Treasurers only");
         _;
     }
+
+    function setWard(address appointee) public isTreasurer(){
+        require(!treasurers[appointee], "Appointee is already treasurer.");
+        treasurers[appointee] = true;
+    }
+
+    function removeWard(address shame) public isTreasurer(){
+        require(mesaj != shame, "Et tu, Brute ?");
+        treasurers[shame] = false;
+    }
     
-    constructor(address SportsBook,IERC20 _DAI, IBookToken _BOOK, ILockedLiqCalculator _BookLiqCalculator, IUniswapV2Factory _factory,IUniswapV2Router02 _router) {
+    constructor( IWDAI _wdai, IBookToken _BOOK, ILockedLiqCalculator _BookLiqCalculator, IUniswapV2Factory _factory, IUniswapV2Router02 _router) {
         factory = _factory;
         router = _router;
         BookLiqCalculator = _BookLiqCalculator;
         BOOK = _BOOK;
-        DAI = _DAI;
-        owner = msg.sender;
-        strategies[SportsBook] = true;
-        treasurers[msg.sender] = true;
-        DAI.approve(SportsBook,uint(-1));
+        WDAI = _wdai;
+        DAI = WDAI.wrappedToken();
+        mesaj = msg.sender;
+
+        treasurers[mesaj] = true;
+        WDAI.approve(address(router),uint(-1));
     }
     
     receive() external payable { }
 
-    function sendEther(address payable _to, uint256 _amount) public ownerOnly(){
-        (bool success,) = _to.call{ value: _amount }("");
-        require (success, "Transfer failed");
+    function addStrategy(address strategy) public isTreasurer(){
+        require(!strategies[strategy], 'Specified address is already a strategy');
+        strategies[strategy] = true;
+        DAI.approve(strategy,uint(-1));
     }
 
-    function sendToken(IERC20 _token, address _to, uint256 _amount) public {
-        require(treasurers[msg.sender], "Only Treasurers have access");
-        require(strategies[_to], "Recipient is not an approved strategy");
-        _token.safeTransfer(_to, _amount);
-    }
-
-    function setWDAI(IWDAI _WDAI) external ownerOnly(){
-        WDAI = _WDAI;
-        WDAI.approve(address(router),uint(-1));
-        DAI.approve(address(WDAI),uint(-1));
-    }
-
-    function getPair() external ownerOnly(){
-        pair = factory.getPair(address(BOOK), address(WDAI));
-    }
-
-    function numberGoUp(uint _amt) external ownerOnly(){
+    function numberGoUp(uint _amt) external isTreasurer(){
         WDAI.deposit(_amt);
 
         address[] memory path = new address[](2);

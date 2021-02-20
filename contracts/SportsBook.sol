@@ -92,17 +92,19 @@ contract SportsBook is ChainlinkClient  {
 
     address treasury;
     address oracle;
+    address mesaj;
     bytes32 public betID;
     uint256 MAX_BET;
     IERC20 dai;
-
+    bool allowWagers = false;
     int public check = 99;
     int256 public oddsCheck = 0;
 
     // constructor (IERC20 _DAI, address _treasury) public payable{ 
     constructor (IERC20 _DAI) public payable{ 
         // treasury = _treasury;
-        wards[msg.sender] = true;
+        mesaj = msg.sender;
+        wards[mesaj] = true;
         setPublicChainlinkToken();
         // MAX_BET = _DAI.allowance(treasury,address(this));
         
@@ -239,6 +241,7 @@ contract SportsBook is ChainlinkClient  {
     }
     
     function bet(bytes16 _betRef, uint256 _index, uint256 _selection, uint256 _wagerAmt, int256 _rule ) public {
+        require(allowWagers, 'Sports Book not currently accepting wagers');
         bytes32 _queryID = buildBet(_index, _selection, _rule);
         
         if(_queryID != 0x0){
@@ -257,6 +260,7 @@ contract SportsBook is ChainlinkClient  {
     }
 
     function betParlay(bytes16 _betRef,uint _amount, string memory _indexes, string memory _selections, string memory _rules) public{
+        require(allowWagers, 'Sports Book not currently accepting wagers');
         bytes32 _queryID = buildParlay(_indexes, _selections, _rules );
 
         if(_queryID != 0x0){
@@ -266,6 +270,9 @@ contract SportsBook is ChainlinkClient  {
         strings.slice memory s = _indexes.toSlice();
         strings.slice memory delim = ",".toSlice();
         string[] memory indexes = new string[](s.count(delim) + 1);
+
+        require(indexes.length < 6, 'Parlay too large');
+
         for(uint i = 0; i < indexes.length; i++) {
            indexes[i] = s.split(delim).toString();
         }
@@ -319,6 +326,20 @@ contract SportsBook is ChainlinkClient  {
             // dai.transferFrom(treasury,creator,amt);
             dai.transfer(msg.sender,amt*10e18);
         }
+    }
+
+    function setSportsBookState(bool state) isWard(){
+        allowWagers = state;
+    }
+
+    function setWard(address appointee) public isWard(){
+        require(!wards[appointee], "Appointee is already ward.");
+        wards[appointee] = true;
+    }
+
+    function removeWard(address shame) public isWard(){
+        require(mesaj != shame, "Et tu, Brute ?");
+        wards[shame] = false;
     }
 
     /* Requesters */
