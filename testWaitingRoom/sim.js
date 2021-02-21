@@ -1,7 +1,7 @@
 const { expect } = require('chai');
 const { ethers } = require('hardhat');
 const { utils, BigNumber, constants } = require("ethers");
-const { createWETH, createUniswap } = require("./helpers.js");
+const { createWETH, createUniswap } = require("../test/helpers.js");
 // const WBTC = artifacts.require('WBTC');
 
 

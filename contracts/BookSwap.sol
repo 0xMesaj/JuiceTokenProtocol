@@ -7,8 +7,9 @@ import "./uniswap/IUniswapV2Router02.sol";
 import "./uniswap/IUniswapV2Factory.sol";
 import './uniswap/libraries/TransferHelper.sol';
 import './uniswap/IUniswapV2Pair.sol';
-import 'hardhat/console.sol';
 import './SafeMath.sol';
+
+import 'hardhat/console.sol';
 
 /*
 

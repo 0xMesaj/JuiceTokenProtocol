@@ -3,7 +3,7 @@ pragma solidity >0.4.13 <0.7.7;
 
 import "./SafeMath.sol";
 import "./strings.sol";
-import "./IERC20.sol";
+import "./interfaces/IERC20.sol";
 // import "chainlink/contracts/src/v0.6/ChainlinkClient.sol";
 import "https://raw.githubusercontent.com/smartcontractkit/chainlink/develop/evm-contracts/src/v0.6/ChainlinkClient.sol";
 pragma experimental ABIEncoderV2;
@@ -115,45 +115,45 @@ contract SportsBook is ChainlinkClient  {
     function computeResult( uint256 _index, uint256 _selection, int256 _rule ) internal view returns(int win){
         MatchScores memory m = matchResults[_index];
         
-        uint256 home_score = uint(stringToBytes32(m.homeScore));
-        uint256 away_score = uint(stringToBytes32(m.homeScore));
+        uint256 home_score = bytesToUInt(stringToBytes32(m.homeScore));
+        uint256 away_score = bytesToUInt(stringToBytes32(m.homeScore));
         uint selection = _selection;
         int rule = _rule;
 
         if(selection == 0){
-            if( uint256(int256(home_score) + rule/10) > away_score){
+              if( int(home_score.mul(10))+rule > int(away_score.mul(10)) ){
                 win = 1;
             }
-            else if( uint256(int256(home_score) + rule/10) == away_score ){
+            else if( int(home_score.mul(10)) + rule == int(away_score.mul(10)) ){
                 win = 2;
             }
         }
         else if(selection == 1){
-            if(uint256(int256(away_score) + rule/10) > home_score){
+            if( (int(away_score.mul(10))+rule) > int(home_score.mul(10))){
                 win = 1;
             }
-            else if(uint256(int256(away_score) + rule/10) == home_score){
+            else if( (int(away_score.mul(10))+rule) == int(home_score.mul(10)) ){
                 win = 2;
             }
         }
         else if (selection == 2 ){
-            if((home_score + away_score > uint256(rule/10))){
+            if(int((home_score.mul(10)) + (away_score.mul(10))) > rule){
                 win = 1;
             }
-            else if (home_score + away_score == uint256(rule/10)){
+            else if (int((home_score.mul(10)) + (away_score.mul(10))) == rule){
                 win = 2;
             }
         }
         else if(selection == 3){
-            if((uint256(rule/10) > home_score + away_score)){
+            if(rule > int(home_score.mul(10) + away_score.mul(10))){
                 win = 1;
             }
-            else if (uint256(rule/10) == home_score + away_score){
+            else if (rule == int(home_score.mul(10) + away_score.mul(10))){
                 win = 2;
             }
         }
         else if(selection == 4 ){
-            if((home_score > away_score)){
+              if((home_score > away_score)){
                 win = 1;
             }
             else if (home_score == away_score){
@@ -162,10 +162,10 @@ contract SportsBook is ChainlinkClient  {
         }
         else if (selection == 5 ){
             if(away_score > home_score){
-                  win = 1;
+                win = 1;
             }
             else if(away_score == home_score){
-                  win = 2;
+                win = 2;
             }
         }
     }
@@ -414,13 +414,8 @@ contract SportsBook is ChainlinkClient  {
         address creator = b.creator;
         uint256 amt = b.amount;
         uint256 potential = 0;
-        // if(_odds > 0){
-        //     potential = safeMultiply(amt,_odds)/100;
-        // }
-        // else{
-        //     potential = safeDivide(amt,-1*_odds)/100;
-        // }
-        potential = (_odds > 0 ? safeMultiply(amt,_odds)/100 : safeDivide(amt,-1*_odds)/100);
+
+        potential = (_odds > 0 ? safeMultiply(amt,_odds)/100 : safeDivide(amt,-1*_odds)*100);
         Risk storage risk = sportsBookRisk[b.index];
         if(b.selection == 0){
             if(risk.spreadDelta.outcome0PotentialWin.add(potential).sub(risk.spreadDelta.outcome1Wagered) > MAX_BET || (_odds<100 && _odds>-100)){
@@ -538,6 +533,25 @@ contract SportsBook is ChainlinkClient  {
         uint256 c = a + b;
         require(c >= a, "Sorry, addition is hard...");
         return c;
+    }
+
+    function bytesToUInt(bytes32 v) internal pure returns (uint ret) {
+        if (v == 0x0) {
+            revert();
+        }
+        uint digit;
+        for (uint i = 0; i < 32; i++) {
+            digit = uint((uint(v) / (2 ** (8 * (31 - i)))) & 0xff);
+            if (digit == 0) {
+                break;
+            }
+            else if (digit < 48 || digit > 57) {
+                revert();
+            }
+            ret *= 10;
+            ret += (digit - 48);
+        }
+        return ret;
     }
       
     function stringToBytes32(string memory source) internal pure returns (bytes32 result) {
