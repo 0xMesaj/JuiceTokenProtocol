@@ -25,6 +25,7 @@ contract SportsBook is ChainlinkClient  {
     
     event BetRequested(bytes32 betID,bytes16 betRef);
     event BetAccepted(bytes32 betID,int256 odds);
+    event BetRejected(bytes32 betID);
     event ParlayAccepted(bytes32 betID,bytes32 odds);
     
     struct MatchScores{
@@ -110,64 +111,6 @@ contract SportsBook is ChainlinkClient  {
         
         oracle = 0x4dfFCF075d9972F743A2812632142Be64CA8B0EE;
         dai = _DAI;
-    }  
-    
-    function computeResult( uint256 _index, uint256 _selection, int256 _rule ) internal view returns(int win){
-        MatchScores memory m = matchResults[_index];
-        
-        uint256 home_score = bytesToUInt(stringToBytes32(m.homeScore));
-        uint256 away_score = bytesToUInt(stringToBytes32(m.homeScore));
-        uint selection = _selection;
-        int rule = _rule;
-
-        if(selection == 0){
-              if( int(home_score.mul(10))+rule > int(away_score.mul(10)) ){
-                win = 1;
-            }
-            else if( int(home_score.mul(10)) + rule == int(away_score.mul(10)) ){
-                win = 2;
-            }
-        }
-        else if(selection == 1){
-            if( (int(away_score.mul(10))+rule) > int(home_score.mul(10))){
-                win = 1;
-            }
-            else if( (int(away_score.mul(10))+rule) == int(home_score.mul(10)) ){
-                win = 2;
-            }
-        }
-        else if (selection == 2 ){
-            if(int((home_score.mul(10)) + (away_score.mul(10))) > rule){
-                win = 1;
-            }
-            else if (int((home_score.mul(10)) + (away_score.mul(10))) == rule){
-                win = 2;
-            }
-        }
-        else if(selection == 3){
-            if(rule > int(home_score.mul(10) + away_score.mul(10))){
-                win = 1;
-            }
-            else if (rule == int(home_score.mul(10) + away_score.mul(10))){
-                win = 2;
-            }
-        }
-        else if(selection == 4 ){
-              if((home_score > away_score)){
-                win = 1;
-            }
-            else if (home_score == away_score){
-                win = 2;
-            }
-        }
-        else if (selection == 5 ){
-            if(away_score > home_score){
-                win = 1;
-            }
-            else if(away_score == home_score){
-                win = 2;
-            }
-        }
     }
     
     function resolveMatch( bytes32 _betID ) public {
@@ -353,6 +296,64 @@ contract SportsBook is ChainlinkClient  {
         wards[shame] = false;
     }
 
+    function computeResult( uint256 _index, uint256 _selection, int256 _rule ) internal view returns(int win){
+        MatchScores memory m = matchResults[_index];
+        
+        uint256 home_score = bytesToUInt(stringToBytes32(m.homeScore));
+        uint256 away_score = bytesToUInt(stringToBytes32(m.homeScore));
+        uint selection = _selection;
+        int rule = _rule;
+
+        if(selection == 0){
+              if( int(home_score.mul(10))+rule > int(away_score.mul(10)) ){
+                win = 1;
+            }
+            else if( int(home_score.mul(10)) + rule == int(away_score.mul(10)) ){
+                win = 2;
+            }
+        }
+        else if(selection == 1){
+            if( (int(away_score.mul(10))+rule) > int(home_score.mul(10))){
+                win = 1;
+            }
+            else if( (int(away_score.mul(10))+rule) == int(home_score.mul(10)) ){
+                win = 2;
+            }
+        }
+        else if (selection == 2 ){
+            if(int((home_score.mul(10)) + (away_score.mul(10))) > rule){
+                win = 1;
+            }
+            else if (int((home_score.mul(10)) + (away_score.mul(10))) == rule){
+                win = 2;
+            }
+        }
+        else if(selection == 3){
+            if(rule > int(home_score.mul(10) + away_score.mul(10))){
+                win = 1;
+            }
+            else if (rule == int(home_score.mul(10) + away_score.mul(10))){
+                win = 2;
+            }
+        }
+        else if(selection == 4 ){
+              if((home_score > away_score)){
+                win = 1;
+            }
+            else if (home_score == away_score){
+                win = 2;
+            }
+        }
+        else if (selection == 5 ){
+            if(away_score > home_score){
+                win = 1;
+            }
+            else if(away_score == home_score){
+                win = 2;
+            }
+        }
+    }
+
     /* Requesters */
     function fetchFinalScore( uint256 _index ) public {
         Chainlink.Request memory req =  buildChainlinkRequest(stringToBytes32('9de0f2eae1104a248ddd327624360d7a'), address(this), this.fulfillScores.selector);
@@ -421,6 +422,7 @@ contract SportsBook is ChainlinkClient  {
             if(risk.spreadDelta.outcome0PotentialWin.add(potential).sub(risk.spreadDelta.outcome1Wagered) > MAX_BET || (_odds<100 && _odds>-100)){
                 delete bets[_requestId];
                 refund[creator] = safeAdd(amt,refund[creator]);
+                emit BetRejected(_requestId);
             }
             else{
                 risk.spreadDelta.outcome0PotentialWin = potential.add(risk.spreadDelta.outcome0PotentialWin);
@@ -433,6 +435,7 @@ contract SportsBook is ChainlinkClient  {
             if(risk.spreadDelta.outcome1PotentialWin.add(potential).sub(risk.spreadDelta.outcome0Wagered) > MAX_BET || (_odds<100 && _odds>-100)){
                 delete bets[_requestId];
                 refund[creator] = safeAdd(amt,refund[creator]);
+                emit BetRejected(_requestId);
             }
             else{
                 risk.spreadDelta.outcome1PotentialWin = safeAdd(potential,risk.spreadDelta.outcome1PotentialWin);
@@ -445,6 +448,7 @@ contract SportsBook is ChainlinkClient  {
             if(risk.pointDelta.outcome0PotentialWin.add(potential).sub(risk.pointDelta.outcome1Wagered) > MAX_BET || (_odds<100 && _odds>-100)){
                 delete bets[_requestId];
                 refund[creator] = safeAdd(amt,refund[creator]);
+                emit BetRejected(_requestId);
             }
             else{
                 risk.pointDelta.outcome0PotentialWin = safeAdd(potential,risk.pointDelta.outcome0PotentialWin);
@@ -459,6 +463,7 @@ contract SportsBook is ChainlinkClient  {
             if(risk.pointDelta.outcome1PotentialWin-risk.pointDelta.outcome0Wagered > MAX_BET || (_odds<100 && _odds>-100)){
                 delete bets[_requestId];
                 refund[creator] = safeAdd(amt,refund[creator]);
+                emit BetRejected(_requestId);
             }
             else{
                 b.odds = _odds;
@@ -469,12 +474,11 @@ contract SportsBook is ChainlinkClient  {
             risk.moneylineDelta.outcome0PotentialWin = safeAdd(potential,risk.moneylineDelta.outcome0PotentialWin);
             risk.moneylineDelta.outcome0Wagered = safeAdd(amt,risk.moneylineDelta.outcome0Wagered);
             if(risk.moneylineDelta.outcome0PotentialWin-risk.moneylineDelta.outcome1Wagered > MAX_BET || (_odds<100 && _odds>-100)){
-                check = 4;
                 delete bets[_requestId];
                 refund[creator] = safeAdd(amt,refund[creator]);
+                emit BetRejected(_requestId);
             }
             else{
-                check = 5;
                 b.odds = _odds;
                 emit BetAccepted(_requestId,_odds);
             }
@@ -485,6 +489,7 @@ contract SportsBook is ChainlinkClient  {
             if(risk.moneylineDelta.outcome1PotentialWin-risk.moneylineDelta.outcome0Wagered > MAX_BET || (_odds<100 && _odds>-100)){
                 delete bets[_requestId];
                 refund[creator] = safeAdd(amt,refund[creator]);
+                emit BetRejected(_requestId);
             }
             else{
                 b.odds = _odds;
