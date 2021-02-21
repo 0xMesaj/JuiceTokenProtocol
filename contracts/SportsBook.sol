@@ -13,8 +13,7 @@ pragma experimental ABIEncoderV2;
 Sports Book Contract for the Book Token Protocol
 
 Rules for bets are scaled up by a factor of ten (i.e. a spread bet of +2.5 would be stored as 25),
-due to solidity not handling floating point numbers. Whenever we calculate with the rule, we use 
-(rule/10) to get the true value
+due to solidity not handling floating point numbers
 
 */
 
