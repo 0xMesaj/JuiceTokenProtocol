@@ -79,6 +79,7 @@ contract SportsBook is ChainlinkClient  {
     mapping(bytes32 => uint256) public queriedIndexes;
     mapping(bytes32 => uint256) public queriedStatus;
     mapping(address => bool) public wards;
+    mapping(address => bytes32[]) public addressBets;
 
     modifier isWard(){
         require (wards[msg.sender], "Error: Wards only");
@@ -209,6 +210,7 @@ contract SportsBook is ChainlinkClient  {
         b.rule = _rule;
         b.timestamp = block.timestamp;
         
+        addressBets[b.creator].push(_queryID);
         emit BetRequested(_queryID, _betRef);
     }
 
@@ -250,7 +252,7 @@ contract SportsBook is ChainlinkClient  {
         p.rules = rules;
         p.timestamp = block.timestamp;
     
-
+        addressBets[p.creator].push(_queryID);
         emit BetRequested(_queryID, _betRef);
     }
 
