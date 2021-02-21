@@ -114,7 +114,7 @@ contract SportsBook is ChainlinkClient  {
     
     function resolveMatch( bytes32 _betID ) public {
         Bet memory b = bets[_betID];
-        require(_betID != address(0x0), "Invalid Bet Reference");
+        require(_betID != 0x0, "Invalid Bet Reference");
         require(b.timestamp>matchCancellationTimestamp[b.index], 'Match is invalid');
 
         if(computeResult(b.index,b.selection,b.rule) == 1){
@@ -136,7 +136,7 @@ contract SportsBook is ChainlinkClient  {
     
     function resolveParlay( bytes32 _betID ) public {
         Parlay memory p = parlays[_betID];
-        require(p.creator != address(0x0), "Invalid Bet Reference");
+        require(_betID != address(0x0), "Invalid Bet Reference");
         
         strings.slice memory o = bytes32ToString(p.odds).toSlice();
         strings.slice memory delim = ",".toSlice();
