@@ -136,7 +136,7 @@ contract SportsBook is ChainlinkClient  {
     
     function resolveParlay( bytes32 _betID ) public {
         Parlay memory p = parlays[_betID];
-        require(_betID != address(0x0), "Invalid Bet Reference");
+        require(_betID != 0x0, "Invalid Bet Reference");
         
         strings.slice memory o = bytes32ToString(p.odds).toSlice();
         strings.slice memory delim = ",".toSlice();
