@@ -25,6 +25,7 @@ contract SportsBook is ChainlinkClient  {
     event BetRequested(bytes32 betID,bytes16 betRef);
     event BetAccepted(bytes32 betID,int256 odds);
     event BetRejected(bytes32 betID);
+    event BetDeleted(bytes32 betID);
     event ParlayAccepted(bytes32 betID,bytes32 odds);
     
     struct MatchScores{
@@ -98,8 +99,9 @@ contract SportsBook is ChainlinkClient  {
     uint256 MAX_BET;
     IERC20 dai;
     bool allowWagers = false;
-    int public check = 99;
-    int256 public oddsCheck = 0;
+
+    int public maxCheck = 0;
+    int public compareCheck = 0;
 
     // constructor (IERC20 _DAI, address _treasury) public payable{ 
     constructor (IERC20 _DAI) public payable{ 
@@ -257,31 +259,42 @@ contract SportsBook is ChainlinkClient  {
     }
 
     /* 
-        Only to be used to allow wards to delete faulty bets to protect sports book, 
-        returns wager amt to bet creator. Wards have no incentive to abuse this authority
-        as if it is ever misused, bettors will simply stop using the sports book
+        Allows wards to delete faulty bets, and also allow users to delete
+        their own faulty bets that were unaccepted but not discarded
     */
-    function deleteBet(bytes16 _betRef, bool straight) public isWard() {
+    function deleteBet(bytes32 _betID, bool straight) public {
         if(straight){
-            Bet memory b = bets[_betRef];
+            Bet memory b = bets[_betID];
+            if(!wards[msg.sender]){
+                require(b.timestamp+1800>block.timestamp,'30 Minutes must elapse since bet creation');
+                require(!b.odds,'Bet has already been accepted');
+            }
             require(!matchResults[b.index].recorded, "Match already finalized - Cannot Delete Bet");
             uint256 amt = b.amount;
             address creator = b.creator;
-            delete b;
+            delete bets[_betID];
             // dai.transferFrom(treasury,creator,amt);
-            dai.transfer(msg.sender,amt*10e18);
+            dai.transfer(msg.sender,amt);
+            emit BetDeleted(betID);
         }else{
-            Parlay memory p = parlays[_betRef];
+            Parlay memory p = parlays[_betID];
+            if(!wards[msg.sender]){
+                require(p.timestamp+1800>block.timestamp,'30 Minutes must elapse since bet creation');
+                require(!p.odds,'Bet has already been accepted');
+            }
             for(uint i=0;i<p.indexes.length;i++){
                 require(!matchResults[uint(stringToBytes32(p.indexes[i]))].recorded, "Match already finalized - Cannot Delete Bet");
             }
             uint256 amt = p.amount;
             address creator = p.creator; 
-            delete p;
+            delete parlays[_betID];
             // dai.transferFrom(treasury,creator,amt);
-            dai.transfer(msg.sender,amt*10e18);
+            dai.transfer(msg.sender,amt);
+            emit BetDeleted(betID);
         }
     }
+
+
 
     function setSportsBookState(bool state) public isWard(){
         allowWagers = state;
@@ -407,20 +420,18 @@ contract SportsBook is ChainlinkClient  {
 
     function fulfillBetOdds(bytes32 _requestId, int256 _odds) public isOracle() recordChainlinkFulfillment(_requestId){
         // MAX_BET = dai.allowance(treasury,address(this));
-        MAX_BET = dai.balanceOf(address(this));
-        Bet storage b = bets[_requestId];
         
-        oddsCheck = _odds;
-        check = 1;
+        Bet storage b = bets[_requestId];
         
         address creator = b.creator;
         uint256 amt = b.amount;
         uint256 potential = 0;
-
+        MAX_BET = dai.balanceOf(address(this)) - amt;
+        
         potential = (_odds > 0 ? safeMultiply(amt,_odds)/100 : safeDivide(amt,-1*_odds)*100);
         Risk storage risk = sportsBookRisk[b.index];
         if(b.selection == 0){
-            if(risk.spreadDelta.outcome0PotentialWin.add(potential).sub(risk.spreadDelta.outcome1Wagered) > MAX_BET || (_odds<100 && _odds>-100)){
+            if(int(risk.spreadDelta.outcome0PotentialWin.add(potential).sub(risk.spreadDelta.outcome1Wagered)) > int(MAX_BET) || (_odds<100 && _odds>-100)){
                 delete bets[_requestId];
                 refund[creator] = safeAdd(amt,refund[creator]);
                 emit BetRejected(_requestId);
@@ -433,7 +444,7 @@ contract SportsBook is ChainlinkClient  {
             }
         }
         else if(b.selection == 1){
-            if(risk.spreadDelta.outcome1PotentialWin.add(potential).sub(risk.spreadDelta.outcome0Wagered) > MAX_BET || (_odds<100 && _odds>-100)){
+            if(int(risk.spreadDelta.outcome1PotentialWin.add(potential).sub(risk.spreadDelta.outcome0Wagered)) > int(MAX_BET) || (_odds<100 && _odds>-100)){
                 delete bets[_requestId];
                 refund[creator] = safeAdd(amt,refund[creator]);
                 emit BetRejected(_requestId);
@@ -446,7 +457,7 @@ contract SportsBook is ChainlinkClient  {
             }
         }
         else if(b.selection == 2){
-            if(risk.pointDelta.outcome0PotentialWin.add(potential).sub(risk.pointDelta.outcome1Wagered) > MAX_BET || (_odds<100 && _odds>-100)){
+            if(int(risk.pointDelta.outcome0PotentialWin.add(potential).sub(risk.pointDelta.outcome1Wagered)) > int(MAX_BET) || (_odds<100 && _odds>-100)){
                 delete bets[_requestId];
                 refund[creator] = safeAdd(amt,refund[creator]);
                 emit BetRejected(_requestId);
@@ -459,45 +470,48 @@ contract SportsBook is ChainlinkClient  {
             }
         }
         else if(b.selection == 3){
-            risk.pointDelta.outcome1PotentialWin = safeAdd(potential,risk.pointDelta.outcome1PotentialWin);
-            risk.pointDelta.outcome1Wagered = safeAdd(amt,risk.pointDelta.outcome1Wagered);
-            if(risk.pointDelta.outcome1PotentialWin-risk.pointDelta.outcome0Wagered > MAX_BET || (_odds<100 && _odds>-100)){
+            if(int(risk.pointDelta.outcome1PotentialWin.add(potential).sub(risk.pointDelta.outcome0Wagered)) > int(MAX_BET) || (_odds<100 && _odds>-100)){
                 delete bets[_requestId];
                 refund[creator] = safeAdd(amt,refund[creator]);
                 emit BetRejected(_requestId);
             }
             else{
+                risk.pointDelta.outcome1PotentialWin = safeAdd(potential,risk.pointDelta.outcome1PotentialWin);
+                risk.pointDelta.outcome1Wagered = safeAdd(amt,risk.pointDelta.outcome1Wagered);
                 b.odds = _odds;
                 emit BetAccepted(_requestId,_odds);
             }
         }
         else if(b.selection == 4){
-            risk.moneylineDelta.outcome0PotentialWin = safeAdd(potential,risk.moneylineDelta.outcome0PotentialWin);
-            risk.moneylineDelta.outcome0Wagered = safeAdd(amt,risk.moneylineDelta.outcome0Wagered);
-            if(risk.moneylineDelta.outcome0PotentialWin-risk.moneylineDelta.outcome1Wagered > MAX_BET || (_odds<100 && _odds>-100)){
+            if(int(risk.moneylineDelta.outcome0PotentialWin.add(potential).sub(risk.moneylineDelta.outcome1Wagered)) > int(MAX_BET) || (_odds<100 && _odds>-100)){
                 delete bets[_requestId];
                 refund[creator] = safeAdd(amt,refund[creator]);
                 emit BetRejected(_requestId);
             }
             else{
+                risk.moneylineDelta.outcome0PotentialWin = safeAdd(potential,risk.moneylineDelta.outcome0PotentialWin);
+                risk.moneylineDelta.outcome0Wagered = safeAdd(amt,risk.moneylineDelta.outcome0Wagered);
                 b.odds = _odds;
                 emit BetAccepted(_requestId,_odds);
             }
         }
         else if(b.selection == 5){
-            risk.moneylineDelta.outcome1PotentialWin = safeAdd(potential,risk.moneylineDelta.outcome1PotentialWin);
-            risk.moneylineDelta.outcome1Wagered = safeAdd(amt,risk.moneylineDelta.outcome1Wagered);
-            if(risk.moneylineDelta.outcome1PotentialWin-risk.moneylineDelta.outcome0Wagered > MAX_BET || (_odds<100 && _odds>-100)){
+            maxCheck = MAX_BET;
+            compareCheck = risk.moneylineDelta.outcome1PotentialWin.add(potential).sub(risk.moneylineDelta.outcome0Wagered);
+            if(int(risk.moneylineDelta.outcome1PotentialWin.add(potential).sub(risk.moneylineDelta.outcome0Wagered)) > int(MAX_BET) || (_odds<100 && _odds>-100)){
                 delete bets[_requestId];
                 refund[creator] = safeAdd(amt,refund[creator]);
                 emit BetRejected(_requestId);
             }
             else{
+                risk.moneylineDelta.outcome1PotentialWin = safeAdd(potential,risk.moneylineDelta.outcome1PotentialWin);
+                risk.moneylineDelta.outcome1Wagered = safeAdd(amt,risk.moneylineDelta.outcome1Wagered);
                 b.odds = _odds;
                 emit BetAccepted(_requestId,_odds);
             }
         }
     }
+    
     
     function fulfillScores(bytes32 _requestId, bytes32 score) public isOracle() recordChainlinkFulfillment(_requestId){
         require(score != 0x0, "Invalid Response");
