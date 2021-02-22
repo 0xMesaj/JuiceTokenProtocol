@@ -98,9 +98,12 @@ contract SportsBook is ChainlinkClient  {
     address oracle;
     address mesaj;
     bytes32 public betID;
-    uint256 MAX_BET;
+    int256 MAX_BET;
     IERC20 dai;
     bool allowWagers = false;
+
+
+    int256 public checkCheck;
 
 
     // constructor (IERC20 _DAI, address _treasury) public payable{ 
@@ -405,32 +408,32 @@ contract SportsBook is ChainlinkClient  {
 
     function fulfillParlayOdds(bytes32 _requestId, bytes32 _odds) public isOracle() recordChainlinkFulfillment(_requestId){
         Parlay storage p = parlays[_requestId];
-        MAX_BET = dai.balanceOf(address(this)) - p.amount;
+        MAX_BET = safeSub(dai.balanceOf(address(this)),p.amount);
         p.odds = _odds;
         emit ParlayAccepted(_requestId,p.odds);
     }
 
-    function fulfillBetOdds(bytes32 _requestId, int256 _odds) public isOracle() recordChainlinkFulfillment(_requestId){
+   function fulfillBetOdds(bytes32 _requestId, int256 _odds) public isOracle() recordChainlinkFulfillment(_requestId){
         // MAX_BET = dai.allowance(treasury,address(this));
         
         Bet storage b = bets[_requestId];
         
         address creator = b.creator;
         uint256 amt = b.amount;
-        uint256 potential = 0;
-        MAX_BET = dai.balanceOf(address(this)) - amt;
-        
-        potential = (_odds > 0 ? safeMultiply(amt,_odds)/100 : safeDivide(amt,-1*_odds)*100);
+        MAX_BET = safeSub(dai.balanceOf(address(this)),amt);
+        uint256 potential = (_odds > 0 ? safeMultiply((amt/100),_odds) : safeDivide(amt,-1*_odds)*100);
+
         Risk storage risk = sportsBookRisk[b.index];
         if(b.selection == 0){
-            int256 check = safeSub(risk.spreadDelta.outcome0PotentialWin.add(potential),risk.spreadDelta.outcome1Wagered);
-            if(check > int(MAX_BET) || (_odds<100 && _odds>-100)){
+            uint256 newPotential = safeAdd(potential,risk.spreadDelta.outcome0PotentialWin);
+            int256 check = safeSub(newPotential,risk.spreadDelta.outcome1Wagered);
+            if(check > MAX_BET || (_odds<100 && _odds>-100)){
                 delete bets[_requestId];
                 refund[creator] = safeAdd(amt,refund[creator]);
                 emit BetRejected(_requestId);
             }
             else{
-                risk.spreadDelta.outcome0PotentialWin = potential.add(risk.spreadDelta.outcome0PotentialWin);
+                risk.spreadDelta.outcome0PotentialWin = newPotential;
                 risk.spreadDelta.outcome0Wagered = safeAdd(amt,risk.spreadDelta.outcome0Wagered);
                 b.odds = _odds;
                 emit BetAccepted(_requestId,_odds);
@@ -438,7 +441,7 @@ contract SportsBook is ChainlinkClient  {
         }
         else if(b.selection == 1){
             int256 check = safeSub(risk.spreadDelta.outcome1PotentialWin.add(potential),risk.spreadDelta.outcome0Wagered);
-            if(check > int(MAX_BET) || (_odds<100 && _odds>-100)){
+            if(check > MAX_BET || (_odds<100 && _odds>-100)){
                 delete bets[_requestId];
                 refund[creator] = safeAdd(amt,refund[creator]);
                 emit BetRejected(_requestId);
@@ -452,7 +455,7 @@ contract SportsBook is ChainlinkClient  {
         }
         else if(b.selection == 2){
             int256 check = safeSub(risk.pointDelta.outcome0PotentialWin.add(potential),risk.pointDelta.outcome1Wagered);
-            if(check > int(MAX_BET) || (_odds<100 && _odds>-100)){
+            if(check > MAX_BET || (_odds<100 && _odds>-100)){
                 delete bets[_requestId];
                 refund[creator] = safeAdd(amt,refund[creator]);
                 emit BetRejected(_requestId);
@@ -466,7 +469,7 @@ contract SportsBook is ChainlinkClient  {
         }
         else if(b.selection == 3){
             int256 check = safeSub(risk.pointDelta.outcome1PotentialWin.add(potential),risk.pointDelta.outcome0Wagered);
-            if(check > int(MAX_BET) || (_odds<100 && _odds>-100)){
+            if(check > MAX_BET || (_odds<100 && _odds>-100)){
                 delete bets[_requestId];
                 refund[creator] = safeAdd(amt,refund[creator]);
                 emit BetRejected(_requestId);
@@ -480,7 +483,7 @@ contract SportsBook is ChainlinkClient  {
         }
         else if(b.selection == 4){
             int256 check = safeSub(risk.moneylineDelta.outcome0PotentialWin.add(potential),risk.moneylineDelta.outcome1Wagered);
-            if(check > int(MAX_BET) || (_odds<100 && _odds>-100)){
+            if(check > MAX_BET || (_odds<100 && _odds>-100)){
                 delete bets[_requestId];
                 refund[creator] = safeAdd(amt,refund[creator]);
                 emit BetRejected(_requestId);
@@ -494,7 +497,7 @@ contract SportsBook is ChainlinkClient  {
         }
         else if(b.selection == 5){
             int256 check = safeSub(risk.moneylineDelta.outcome1PotentialWin.add(potential),risk.moneylineDelta.outcome0Wagered);
-            if(check > int(MAX_BET) || (_odds<100 && _odds>-100)){
+            if(check > MAX_BET || (_odds<100 && _odds>-100)){
                 delete bets[_requestId];
                 refund[creator] = safeAdd(amt,refund[creator]);
                 emit BetRejected(_requestId);
