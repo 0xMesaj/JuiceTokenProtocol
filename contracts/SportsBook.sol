@@ -3,7 +3,7 @@ pragma solidity >0.4.13 <0.7.7;
 
 import "./SafeMath.sol";
 import "./strings.sol";
-import "./IERC20.sol";
+import "./interfaces/IERC20.sol";
 // import "chainlink/contracts/src/v0.6/ChainlinkClient.sol";
 import "https://raw.githubusercontent.com/smartcontractkit/chainlink/develop/evm-contracts/src/v0.6/ChainlinkClient.sol";
 pragma experimental ABIEncoderV2;
@@ -43,9 +43,6 @@ contract SportsBook is ChainlinkClient  {
        
         int rule;
         address creator;
-        
-        
-        
     }
 
     struct Parlay{
@@ -103,9 +100,6 @@ contract SportsBook is ChainlinkClient  {
     bool allowWagers = false;
 
 
-    int256 public checkCheck;
-
-
     // constructor (IERC20 _DAI, address _treasury) public payable{ 
     constructor (IERC20 _DAI) public payable{ 
         // treasury = _treasury;
@@ -161,18 +155,13 @@ contract SportsBook is ChainlinkClient  {
             }
         }     
         if(win){
-            int256 odds = calculateParlayOdds(strings.join(','.toSlice(),os));
+            uint256 odds = calculateParlayOdds(os);
             uint256 amt = p.amount;
             address creator = p.creator;
 
-            if (odds > 0) {
-                delete parlays[_betID];
-                dai.transfer(creator, safeMultiply(amt,odds)/100);
-            }
-            else{
-                delete parlays[_betID];
-                dai.transfer(creator, safeDivide(amt,(-1*odds)/-100));
-            }
+            delete parlays[_betID];
+            dai.transfer(creator, amt.mul(odds)/100);
+
         }
     }
     
@@ -412,8 +401,9 @@ contract SportsBook is ChainlinkClient  {
         p.odds = _odds;
         emit ParlayAccepted(_requestId,p.odds);
     }
+    
 
-   function fulfillBetOdds(bytes32 _requestId, int256 _odds) public isOracle() recordChainlinkFulfillment(_requestId){
+    function fulfillBetOdds(bytes32 _requestId, int256 _odds) public isOracle() recordChainlinkFulfillment(_requestId){
         // MAX_BET = dai.allowance(treasury,address(this));
         
         Bet storage b = bets[_requestId];
@@ -524,19 +514,33 @@ contract SportsBook is ChainlinkClient  {
     }
 
     /* Utilities */
-     function calculateParlayOdds(string memory _o) internal pure returns (int256 odds){
-        strings.slice memory o = _o.toSlice();
-        strings.slice memory delim = ",".toSlice();
-        string[] memory os = new string[](o.count(delim) + 1);
-        for(uint i=0;i < os.length; i++){
-            odds += int256(stringToBytes32(os[i]));
+    function calculateParlayOdds(strings.slice[] memory o) public returns (uint256 odds){
+        odds = 1;
+        for(uint i=0;i < o.length; i++){
+            if(i==0){
+                odds *= stringToUint(o[i].toString());
+            }
+            else{
+                odds = odds*stringToUint(o[i].toString())/100;
+            }
         }
-        return(odds > 2 ? (odds-1)*100 : (-100)/(odds-1));
+    }
+
+     function stringToUint(string memory s) internal view returns (uint result) {
+        bytes memory b = bytes(s);
+        uint i;
+        result = 0;
+        for (i = 0; i < b.length; i++) {
+            uint c = uint(uint8(b[i]));
+            if (c >= 48 && c <= 57) {
+                result = result * 10 + (c - 48);
+            }
+        }
     }
     
     function safeSub(uint256 a, uint256 b) internal pure returns (int256) {
-        int256 c = int(a - b);
-        require( c < int(a), "Sorry, subtraction is hard...");
+        int256 c = int256(a - b);
+        require( c <= int256(a), "Sorry, subtraction is hard...");
         return c;
     }
 
