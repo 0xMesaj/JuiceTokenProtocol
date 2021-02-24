@@ -1,8 +1,8 @@
 pragma solidity >0.4.13 <0.7.7;
 
 
-import "./SafeMath.sol";
-import "./strings.sol";
+import "../SafeMath.sol";
+import "../strings.sol";
 pragma experimental ABIEncoderV2;
 import 'hardhat/console.sol';
 

@@ -41,18 +41,22 @@ contract SBGE {
     IBookTreasury immutable treasury;
 
     IUniswapV2Pair BOOKwdai;
-    IBookLiquidity wrappedBookwdai;
+    IERC20 book_lpToken;
 
 
     uint256 public totalDAICollected;
     uint256 public totalBOOKBought;
     uint256 public totalBOOKwdai;
+    uint256 public totalDAIwdai;
     uint256 recoveryDate = block.timestamp + 2592000; // 1 Month
 
 
-    // 10000 = 100%
-    uint16 constant public vaultPercent = 8500; // Proportionate amount used to seed the vault
-    uint16 constant public buyPercent = 500; // Proportionate amount used to group buy RootKit for distribution to participants
+    // Scaled By a Factor of 100, 10000 = 100%
+    uint16 constant public poolPercent = 8000; // BOOK-wDAI Liquidity Pool
+    uint16 constant public daiPoolPercent = 600; // DAI-wDAI Liquidity Pool
+    uint16 constant public buyPercent = 400; // Used to execute initial purchase of BOOK token from LP for contributors
+    uint16 constant public development = 500; // Developemt/Project Fund
+    uint16 constant public devPayment = 500; // Payment
 
     mapping (address => uint256) public tokenReserves;
 
@@ -84,7 +88,11 @@ contract SBGE {
 
         uniswapV2Factory = IUniswapV2Factory(_uniswapV2Router.factory());
         dai = _wdai.wrappedToken();
-        _wdai.wrappedToken().approve(address(_wdai),9999999999999999999999999); //GIVE wdai approval to move all dai from here to wdai contract to be wrapped
+
+        _wdai.wrappedToken().approve(address(_wdai),uint(-1));
+        _wdai.approve(address(_uniswapV2Router), uint256(-1));
+        _wdai.wrappedToken().approve(address(_uniswapV2Router), uint256(-1));
+        _BOOK.approve(address(_uniswapV2Router), uint256(-1));
     }
 
     function activate() public ownerOnly(){
@@ -108,6 +116,10 @@ contract SBGE {
 
     function contributeDAI( uint256 _amount ) external payable active(){
         require(_amount > 0, "Contribution amount must be greater than 0");
+        uint256 oldContribution = daiContribution[msg.sender];
+        if (oldContribution == 0) {
+            contributors.push(msg.sender);
+        }
         dai.transferFrom(msg.sender, address(this), _amount);
         totalDAIContribution += _amount;
         daiContribution[msg.sender] += _amount;
@@ -116,6 +128,12 @@ contract SBGE {
 
     function contributeToken(address _token, uint256 _amount) external payable active(){
         require(_amount > 0, "Contribution amount must be greater than 0");
+        uint256 oldContribution = daiContribution[msg.sender];
+        uint256 newContribution = oldContribution + msg.value;
+        if (oldContribution == 0 ) {
+            contributors.push(msg.sender);
+        }
+
         address token0;
 
         try IUniswapV2Pair(_token).token0() { token0 = IUniswapV2Pair(_token).token0(); } catch { }
@@ -185,15 +203,7 @@ contract SBGE {
         }
     }
 
-    function preBuyForGroup(uint256 wdaiAmount) private{      
-        address[] memory path = new address[](2);
-        path[0] = address(wdai);
-        path[1] = address(BOOK);
-        wdai.deposit(wdaiAmount);
-        uint256[] memory amountsBOOK = uniswapV2Router.swapExactTokensForTokens(wdaiAmount, 0, path, address(this), block.timestamp);
-        totalBOOKBought = amountsBOOK[1];
-        console.log("Total BOOK Bought: %s",totalBOOKBought);
-    }
+   
 
     function sellTokenForDAI(address _token, uint256 _amount, bool _from) internal returns (uint256 daiAmount){
         address pairWithDAI = IUniswapV2Factory(uniswapV2Factory).getPair(_token, address(dai));
@@ -233,14 +243,22 @@ contract SBGE {
         amountOut = numerator / denominator;
     }
 
-    
     receive() external payable active(){
+        require(msg.value > 0, 'Value must me greater than 0');
         uint256 oldContribution = daiContribution[msg.sender];
-        uint256 newContribution = oldContribution + msg.value;
-        if (oldContribution == 0 && newContribution > 0) {
+        if ( oldContribution == 0 ) {
             contributors.push(msg.sender);
         }
-        daiContribution[msg.sender] = newContribution;
+        uint256 oldBalance = weth.balanceOf(address(this));
+        weth.deposit(msg.value);
+        uint256 newBalance = weth.balanceOf(address(this));
+        require(newBalance > oldBalance, 'No wETH received from wrap');
+
+        uint256 wETHamt = newBalance.sub(oldBalance);
+        uint256 amountOut = sellTokenForDAI(weth, wETHamt, true);
+
+        require(amountOut > 0, 'No DAI received from sale');
+        daiContribution[msg.sender] += amountOut;
     }
 
     function setupBOOKwdai() public{
@@ -251,55 +269,55 @@ contract SBGE {
         }
     }
 
-     function completeSetup(IBookLiquidity _wrappedBookwdai) public ownerOnly(){        
-        require (address(_wrappedBookwdai.wrappedToken()) == address(BOOKwdai), "Wrong LP Wrapper");
-        wrappedBookwdai = _wrappedBookwdai;
+    function preBuyForGroup(uint256 amount) internal {      
+        address[] memory path = new address[](2);
+        path[0] = address(wdai);
+        path[1] = address(BOOK);
+        uint256 wrapAmount = amount.mul(buyPercent).div(10000);
+        wdai.deposit(wrapAmount);
+        uint256 buyAmount = wdai.balanceOf(address(this));
+        uint256[] memory amountsBOOK = uniswapV2Router.swapExactTokensForTokens(buyAmount, 0, path, address(this), block.timestamp);
 
-        wdai.approve(address(uniswapV2Router), uint256(-1));
-        BOOK.approve(address(uniswapV2Router), uint256(-1));
-        BOOKwdai.approve(address(_wrappedBookwdai), uint256(-1));
     }
 
-    function distribute() public payable{
+    function distribute() internal {
         require (!distributionComplete, "Distribution complete");
         uint256 totalDAI = totalDAIContribution;
-        require (totalDAI > 0, "Nothing to distribute");
+        require (totalDAI > 0, "Sad...");
         distributionComplete = true;
         totalDAICollected = totalDAI;
 
         TransferPortal portal = TransferPortal(address(BOOK.transferPortal()));
         portal.setUnrestricted(true);
+
         createBOOKwdaiLiquidity(totalDAI);
+        createDAILiquidity(totalDAI);
+        preBuyForGroup(totalDAI);
 
-        retrieveDAI();
-        uint256 daiBalance = dai.balanceOf(address(this));
-
-        preBuyForGroup(daiBalance * buyPercent / 10000);
-
-        retrieveDAI();
-        dai.transfer(address(treasury), daiBalance * vaultPercent / 10000);
         dai.transfer(owner, dai.balanceOf(address(this)));
-        BOOKwdai.transfer(owner, BOOKwdai.balanceOf(address(this)));
 
+  
         portal.setUnrestricted(false);
     }
 
-    function createBOOKwdaiLiquidity(uint256 totalDAI) private{
-        // Create WDAI/BOOK Liquidity Pool 
-        wdai.deposit(totalDAI);
-        (,,totalBOOKwdai) = uniswapV2Router.addLiquidity(address(wdai), address(BOOK), wdai.balanceOf(address(this)), BOOK.totalSupply(), 0, 0, address(this), block.timestamp);
-        (uint r1,uint r2) = UniswapV2Library.getReserves(address(uniswapV2Factory),address(wdai),address(BOOK));
-        // console.log("***************************");
-        // console.log("Creating BOOK-wDAI Uni V2 Liquidity Pool");
-        // console.log("wDAI LP RESERVE: %s", r1);
-        // console.log("BOOK LP RESERVE: %s", r2);
-        // console.log("TOTAL BOOKWDAI LP TOKEN CREATED: %s", totalBOOKwdai);
-        // console.log("***************************");
-        // Wrap the KETH/ROOT LP for distribution
-        wrappedBookwdai.depositTokens(totalBOOKwdai);  
+    function createDAILiquidity(uint256 totalDAI) internal {
+        wdai.deposit(totalDAI.mul(daiPoolPercent).div(20000));
+        
+        //Deposit wDAI/DAI at 1:1 ratio
+        (,,totalDAIwdai) = uniswapV2Router.addLiquidity(address(wdai), address(dai), wdai.balanceOf(address(this)), wdai.balanceOf(address(this)), 0, 0, address(this), block.timestamp);
+        book_lpToken = IERC20(uniswapV2Factory.getPair(address(wdai), address(dai)));
+
     }
 
-     function retrieveDAI() private{
+    function createBOOKwdaiLiquidity(uint256 totalDAI) internal{
+        // Create WDAI/BOOK Liquidity Pool 
+        wdai.deposit(totalDAI.mul(poolPercent).div(10000));
+
+        (,,totalBOOKwdai) = uniswapV2Router.addLiquidity(address(wdai), address(BOOK), wdai.balanceOf(address(this)), BOOK.totalSupply(), 0, 0, address(this), block.timestamp);
+
+    }
+
+     function retrieveDAI() internal{
         wdai.fund(address(this));
         wdai.withdraw(wdai.balanceOf(address(this)));
     }
@@ -309,10 +327,10 @@ contract SBGE {
 
         // Send Book/wDAI liquidity tokens
         uint256 share = _contribution.mul(totalBOOKwdai) / totalDAI;        
-        if (share > wrappedBookwdai.balanceOf(address(this))) {
-            share = wrappedBookwdai.balanceOf(address(this)); // Should never happen, but just being safe.
+        if (share > book_lpToken.balanceOf(address(this))) {
+            share = book_lpToken.balanceOf(address(this));
         }
-        wrappedBookwdai.transfer(_to, share);  
+        book_lpToken.transfer(_to, share);  
 
         // Send BOOK
         TransferPortal portal = TransferPortal(address(BOOK.transferPortal()));
@@ -320,7 +338,7 @@ contract SBGE {
 
         share = _contribution.mul(totalBOOKBought) / totalDAI;
         if (share > BOOK.balanceOf(address(this))) {
-            share = BOOK.balanceOf(address(this)); // Should never happen, but just being safe.
+            share = BOOK.balanceOf(address(this));
         }
         BOOK.transfer(_to, share);
 

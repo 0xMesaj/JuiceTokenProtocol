@@ -1,7 +1,7 @@
 const { expect } = require('chai');
 const { ethers } = require('hardhat');
 const { utils, BigNumber, constants } = require("ethers");
-const { createWETH, createUniswap } = require("../test/helpers.js");
+const { createWETH, createUniswap } = require("./helpers.js");
 // const WBTC = artifacts.require('WBTC');
 
 
@@ -20,7 +20,7 @@ describe('Book Protocol Sim', () => {
         BookLiqCalculatorFactory = await ethers.getContractFactory("LockedLiqCalculator");  
         SBGEContractFactory = await ethers.getContractFactory('SBGE'); 
         BookTreasuryFactory = await ethers.getContractFactory('BookTreasury');
-        SportsBookFactory = await ethers.getContractFactory('SportsBook');
+        SportsBookFactory = await ethers.getContractFactory('TestSportsBook');
         BookVaultFactory = await ethers.getContractFactory('BookVault');
         
         [owner, mesaj, lpMan, aOne, aTwo, aThree, aFour, aFive, _] = await ethers.getSigners();
@@ -45,8 +45,10 @@ describe('Book Protocol Sim', () => {
         const DAItoken = await uniswap.dai;     
         const BookLiqCalculator = await BookLiqCalculatorFactory.deploy(BOOKtoken.address, uniswap.factory.address);
         await BOOKtoken.setTransferPortal(portal.address);
-        // const SportsBook = await SportsBookFactory.deploy(); 
-        const BookTreasury = await BookTreasuryFactory.deploy(SportsBook.address,DAItoken.address,BOOKtoken.address, BookLiqCalculator.address, uniswap.factory.address, uniswap.router.address)
+        const SportsBook = await SportsBookFactory.deploy(DAItoken.address); 
+        // const BookTreasury = await BookTreasuryFactory.deploy(SportsBook.address,DAItoken.address,BOOKtoken.address, BookLiqCalculator.address, uniswap.factory.address, uniswap.router.address)
+        const BookTreasury = await BookTreasuryFactory.deploy(BOOKtoken.address, BookLiqCalculator.address, uniswap.factory.address, uniswap.router.address)
+
         const wDAI = await wDAIContract.deploy(DAItoken.address, BookTreasury.address, "wDAI", "wDAI");
         await BookTreasury.connect(owner).setWDAI(wDAI.address);
         // await SportsBook.connect(mesaj).setTreasury(BookTreasury.address);
@@ -86,9 +88,8 @@ describe('Book Protocol Sim', () => {
         await BOOKtoken.connect(owner).transfer(sbge.address, 28000000);
 
         await sbge.connect(owner).setupBOOKwdai();
+
         const BOOKwdai = uniswap.pairFor(await uniswap.factory.getPair(wDAI.address, BOOKtoken.address));
-        const wrappedBOOKwdai = await bookLiquidityFactory.connect(owner).deploy(BOOKwdai.address, "wrappedBOOKwdai", "WDAIBOOK");
-        await sbge.connect(owner).completeSetup(wrappedBOOKwdai.address);
 
         await portal.connect(owner).allowPool(wDAI.address);
         await portal.connect(owner).setUnrestrictedController(sbge.address, true);
@@ -105,10 +106,10 @@ describe('Book Protocol Sim', () => {
         await DAItoken.connect(aFive).approve(sbge.address,constants.MaxUint256);
         await uniswap.wbtc.connect(mesaj).approve(sbge.address,constants.MaxUint256);
         await weth.connect(mesaj).approve(sbge.address,constants.MaxUint256);
-        await wrappedBOOKwdai.connect(aThree).approve(BookVault.address,constants.MaxUint256);  //for staking to vault
-        await wrappedBOOKwdai.connect(aFour).approve(BookVault.address,constants.MaxUint256);
-        await wrappedBOOKwdai.connect(aFive).approve(BookVault.address,constants.MaxUint256);
-        await wrappedBOOKwdai.connect(mesaj).approve(BookVault.address,constants.MaxUint256);
+        await BOOKwdai.connect(aThree).approve(BookVault.address,constants.MaxUint256);  //for staking to vault
+        await BOOKwdai.connect(aFour).approve(BookVault.address,constants.MaxUint256);
+        await BOOKwdai.connect(aFive).approve(BookVault.address,constants.MaxUint256);
+        await BOOKwdai.connect(mesaj).approve(BookVault.address,constants.MaxUint256);
         await WETHWBTC.connect(lpMan).approve(sbge.address,constants.MaxUint256);
         
         await sbge.connect(aThree).contributeDAI(10000000);
@@ -166,15 +167,15 @@ describe('Book Protocol Sim', () => {
         await sbge.connect(mesaj).claim();
 
         
-        await BookVault.connect(owner).addPool(10, wrappedBOOKwdai.address)
+        await BookVault.connect(owner).addPool(10, BOOKwdai.address)
         // console.log("Pool Info Token="+(await BookVault.poolInfo(0)))
         expect(await BookVault.poolInfoCount()).to.equal(1);
 
-        const aThreeStakeAmt = await wrappedBOOKwdai.balanceOf(aThree.address);
+        const aThreeStakeAmt = await BOOKwdai.balanceOf(aThree.address);
         await BookVault.connect(aThree).deposit(0,aThreeStakeAmt)
-        await BookVault.connect(aFour).deposit(0,await wrappedBOOKwdai.balanceOf(aFour.address))
-        await BookVault.connect(aFive).deposit(0,await wrappedBOOKwdai.balanceOf(aFive.address))
-        await BookVault.connect(mesaj).deposit(0,await wrappedBOOKwdai.balanceOf(mesaj.address))
+        await BookVault.connect(aFour).deposit(0,await BOOKwdai.balanceOf(aFour.address))
+        await BookVault.connect(aFive).deposit(0,await BOOKwdai.balanceOf(aFive.address))
+        await BookVault.connect(mesaj).deposit(0,await BOOKwdai.balanceOf(mesaj.address))
 
         // console.log("Final Owner DAI Balance="+await DAItoken.balanceOf(owner.address))
         // console.log("Final wDAI Contract DAI Balance="+await DAItoken.balanceOf(wDAI.address))
@@ -182,7 +183,8 @@ describe('Book Protocol Sim', () => {
         // await BookTreasury.connect(owner).sendToken(DAItoken.address, SportsBook.address,await DAItoken.balanceOf(BookTreasury.address))
 
         // console.log("Final SportsBook DAI Balance="+await DAItoken.balanceOf(SportsBook.address))
-        console.log("Final Book Vault BOOK Token Balance="+await BOOKtoken.balanceOf(BookVault.address))
+        await wDAI.connect(owner).fund(BookTreasury.address)
+        console.log("Final Treasury DAI Token Balance="+await DAItoken.balanceOf(BookTreasury.address))
 
         await uniswap.router.connect(aTwo).swapExactTokensForTokensSupportingFeeOnTransferTokens(10000, 0, [wDAI.address, BOOKtoken.address], aTwo.address, 2e9);
         await BOOKtoken.connect(aTwo).transfer(aFive.address, await BOOKtoken.balanceOf(aTwo.address))

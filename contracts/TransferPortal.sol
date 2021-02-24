@@ -23,12 +23,11 @@ import "./Address.sol";
 import "./SafeERC20.sol";
 import "./SafeMath.sol";
 
-
+//Scaled up by 100 - 10000 = 100%
 struct BOOKTransferPortalParameters{
     address dev;
-    uint16 devRewardRate;  // 10000 = 100%
-    uint16 vaultRewardRate; // 10000 = 100%
-    // uint16 burnRate; // 10000 = 100%
+    uint16 devRewardRate;
+    uint16 vaultRewardRate;
     address vault;
 }
 
@@ -89,7 +88,6 @@ contract TransferPortal is ITransferPortal{
         unrestricted = _unrestricted;
     }
 
-    // function setParameters(address _dev, address _stake, uint16 vaultRewardRate, uint16 _burnRate, uint16 _devRate) public ownerOnly(){
     function setParameters(address _dev, address _vault, uint16 _vaultRewardRate, uint16 _devRate) public ownerOnly(){
         require (_dev != address(0) && _vault != address(0));
         require (_vaultRewardRate <= 500 && _devRate <= 10, "Sanity");
@@ -97,7 +95,6 @@ contract TransferPortal is ITransferPortal{
         BOOKTransferPortalParameters memory _parameters;
         _parameters.dev = _dev;
         _parameters.vaultRewardRate = _vaultRewardRate;
-        // _parameters.burnRate = _burnRate;
         _parameters.devRewardRate = _devRate;
         _parameters.vault = _vault;
         parameters = _parameters;
@@ -135,7 +132,7 @@ contract TransferPortal is ITransferPortal{
         if (bookUsed < bookAmount) {
             BOOK.transfer(msg.sender, bookAmount - bookUsed);
         }
-        tokenBalance = token.balanceOf(address(this)).sub(tokenBalance); // we do it this way in case there's a burn
+        tokenBalance = token.balanceOf(address(this)).sub(tokenBalance);
         if (tokenBalance > 0) {
             token.safeTransfer(msg.sender, tokenBalance);
         }
@@ -145,11 +142,7 @@ contract TransferPortal is ITransferPortal{
 
     function handleTransfer(address, address from, address to, uint256 amount) external override
         returns (TransferPortalTarget[] memory targets){
-        // console.log("**************************************");
-        // console.log("From: %s", from);
-        // console.log("To: %s", to);
-        // console.log("Amount: %s", amount);
-        // console.log("***************************************");
+
         address mustUpdateAddress = mustUpdate;
         if (mustUpdateAddress != address(0)) {
             mustUpdate = address(0);
@@ -176,23 +169,18 @@ contract TransferPortal is ITransferPortal{
             return new TransferPortalTarget[](0);
         }
         BOOKTransferPortalParameters memory params = parameters;
-        // "amount" will never be > totalSupply which is capped at 28mil, so these multiplications will never overflow
+
+
         // burn = amount * params.burnRate / 10000;
         targets = new TransferPortalTarget[]((params.devRewardRate > 0 ? 1 : 0) + (params.vaultRewardRate > 0 ? 1 : 0));
         uint256 index = 0;
         if (params.vaultRewardRate > 0) {
             targets[index].destination = params.vault;
             targets[index++].amount = amount * params.vaultRewardRate / 10000;
-            // console.log("--");
-            // console.log("Vault Payment Amount: %s", amount * params.vaultRewardRate / 10000);
-            // console.log("--");
         }
         if (params.devRewardRate > 0) {
             targets[index].destination = params.dev;
             targets[index].amount = amount * params.devRewardRate / 10000;
-            // console.log("--");
-            // console.log("Dev Payment Amount: %s", amount * params.devRewardRate / 10000);
-            // console.log("--");
         }
     }
 

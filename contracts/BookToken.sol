@@ -32,12 +32,6 @@ contract BookToken is ERC20{
 
     function _transfer(address sender, address recipient, uint256 amount) internal override virtual 
     {
-        // console.log("******************************************************");
-        // console.log("Transfer Called In Book Token");
-        // console.log("From: %s", sender);
-        // console.log("To: %s", recipient);
-        // console.log("Amt: %s", amount);
-        // console.log("******************************************************");
         require(sender != address(0), "ERC20: transfer from the zero address");
         require(recipient != address(0), "ERC20: transfer to the zero address");
 

@@ -83,19 +83,23 @@ contract BookTreasury {
         treasurers[shame] = false;
     }
     
-    constructor( IWDAI _wdai, IBookToken _BOOK, ILockedLiqCalculator _BookLiqCalculator, IUniswapV2Factory _factory, IUniswapV2Router02 _router) {
+    constructor( IBookToken _BOOK, ILockedLiqCalculator _BookLiqCalculator, IUniswapV2Factory _factory, IUniswapV2Router02 _router) {
         factory = _factory;
         router = _router;
         BookLiqCalculator = _BookLiqCalculator;
         BOOK = _BOOK;
-        WDAI = _wdai;
-        DAI = WDAI.wrappedToken();
+        
         mesaj = msg.sender;
 
         treasurers[mesaj] = true;
-        WDAI.approve(address(router),uint(-1));
+        
     }
 
+    function setWDAI( IWDAI _wdai ) external isTreasurer(){
+        WDAI = _wdai;
+        DAI = WDAI.wrappedToken();
+        WDAI.approve(address(router),uint(-1));
+    }
 
     function numberGoUp(uint _amt) external isTreasurer(){
         WDAI.deposit(_amt);

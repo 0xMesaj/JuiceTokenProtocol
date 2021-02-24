@@ -1,6 +1,6 @@
 pragma solidity ^0.7.0;
 
-import "./ERC20.sol";
+import "../ERC20.sol";
 
 contract TestToken is  ERC20 {
     constructor() public ERC20("DAI", "DAI") { }
