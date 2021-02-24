@@ -7,13 +7,18 @@ const { utils, constants } = require("ethers");
 describe('Test Parlay Resolutions', () => {
     let  owner, addr1, addr2;
     beforeEach(async () => {
+     
+        tokenFactory = await ethers.getContractFactory('TestToken');
+        token = await tokenFactory.deploy();
         sbFactory = await ethers.getContractFactory('TestParlay');
-        sportsBook = await sbFactory.deploy();
+        sportsBook = await sbFactory.deploy(token.address);
         [owner, addr1, addr2, _] = await ethers.getSigners();
     });
 
     describe('Deployment', () => {
-        it('Test', async () => {0x3139352c3335322c3138320000000000
+        it('Test', async () => {
+            token.connect(owner).mint(owner.address,100000000000000000000000);
+            token.connect(owner).mint(sportsBook.address,1000000000000000000000000000000000000000000000000000000);
             // await sportsBook.connect(owner).resolveParlay('0x2d3131342c2d3131330000000000000000000000000000000000000000000000')
             await sportsBook.connect(owner).resolveParlay('0x3139352c3335322c313832000000000000000000000000000000000000000000')
             var ans = await sportsBook.ans()
