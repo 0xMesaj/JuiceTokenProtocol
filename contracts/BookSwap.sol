@@ -36,10 +36,15 @@ contract BookSwap {
         router = _uniswapV2Router;
         factory = IUniswapV2Factory(_uniswapV2Router.factory());
         pair = IUniswapV2Factory(_uniswapV2Router.factory()).getPair(address(book), address(wdai));
+        wdai.approve(address(_uniswapV2Router),uint(-1));
+        dai.approve(address(wdai),uint(-1));
+        wdai.approve(address(wdai),uint(-1));
+        
     }
 
     function buyBookwithDAI(uint256 amt) public {
         uint256 pre_wdaiBalance = wdai.balanceOf(address(this));
+        dai.transferFrom(msg.sender, address(this), amt);
         wdai.deposit(amt);
         uint256 post_wdaiBalance = wdai.balanceOf(address(this));
         require(post_wdaiBalance == (amt+pre_wdaiBalance), "Error: Wrap");
@@ -56,16 +61,22 @@ contract BookSwap {
     }
 
     function sellBookforDAI(uint256 amt) public {
-        uint256 pre_wdaiBalance = wdai.balanceOf(address(this));
+        
+        book.transferFrom(msg.sender, address(this), amt);
         address[] memory path = new address[](2);
         path[0] = address(book);
         path[1] = address(wdai);
-        router.swapExactTokensForTokensSupportingFeeOnTransferTokens(amt, 0, path, address(this), block.timestamp);
+        book.approve(address(router),uint(-1));
+        uint256 sellAmt = book.balanceOf(address(this));
+
+        uint256 pre_wdaiBalance = wdai.balanceOf(address(this));
+        router.swapExactTokensForTokensSupportingFeeOnTransferTokens(sellAmt, 0, path, address(this), block.timestamp);
         uint256 post_wdaiBalance = wdai.balanceOf(address(this));
         require(post_wdaiBalance > pre_wdaiBalance, "Error: Swap");
 
         uint256 pre_daiBalance = dai.balanceOf(address(this));
-        wdai.withdraw(amt);
+        wdai.withdraw(post_wdaiBalance.sub(pre_wdaiBalance));
+
         uint256 post_daiBalance = dai.balanceOf(address(this));
         require(post_daiBalance > pre_daiBalance, "Error: Unwrap");
         require(post_daiBalance.sub(pre_daiBalance) == (post_wdaiBalance-pre_wdaiBalance), "Error: Check");

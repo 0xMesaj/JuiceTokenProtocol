@@ -165,7 +165,7 @@ contract TransferPortal is ITransferPortal{
             }
             require (IERC20(from).totalSupply() >= liquiditySupply[from], "Cannot remove liquidity");            
         }
-        if (unrestricted || freeParticipant[from] || freeParticipant[to]) {
+        if (unrestricted || freeParticipant[from]) {
             return new TransferPortalTarget[](0);
         }
         BOOKTransferPortalParameters memory params = parameters;

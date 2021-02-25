@@ -23,7 +23,7 @@ contract BookToken is ERC20{
 
     constructor(string memory _name, string memory _symbol) ERC20(_name,_symbol) {
         owner = msg.sender;
-        _mint(owner, 28000000); //28 Milli
+        _mint(owner, 28000000000000000000000000); //28 Milli
     }
 
     function setTransferPortal(ITransferPortal _transferPortal) external ownerOnly(){

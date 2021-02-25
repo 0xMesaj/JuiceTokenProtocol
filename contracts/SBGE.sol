@@ -8,6 +8,7 @@ import './WDAI.sol';
 import './interfaces/IBookLiquidity.sol';
 import './interfaces/IBookTokenDistribution.sol';
 import './interfaces/IERC20.sol';
+import './interfaces/IWETH.sol';
 import './interfaces/IBookTreasury.sol';
 import './uniswap/IUniswapV2Pair.sol';
 import './uniswap/IUniswapV2Factory.sol';
@@ -29,7 +30,7 @@ contract SBGE {
     uint256 refundsAllowedUntil;
     address public owner;
     address public DAI;
-    address public WETH;
+    IWETH public WETH;
     address public uniswapFactory;
     address public sushiswapFactory;
     bool public distributionComplete;
@@ -70,7 +71,7 @@ contract SBGE {
         _;
     }
 
-    constructor(BookToken _BOOK, IUniswapV2Router02 _uniswapV2Router, WDAI _wdai, IBookTreasury _treasury, address _WETH){
+    constructor(BookToken _BOOK, IUniswapV2Router02 _uniswapV2Router, WDAI _wdai, IBookTreasury _treasury, IWETH _WETH){
         require (address(_BOOK) != address(0));
         require (address(_treasury) != address(0));
 
@@ -93,10 +94,12 @@ contract SBGE {
         _wdai.approve(address(_uniswapV2Router), uint256(-1));
         _wdai.wrappedToken().approve(address(_uniswapV2Router), uint256(-1));
         _BOOK.approve(address(_uniswapV2Router), uint256(-1));
+        _WETH.approve(address(_uniswapV2Router), uint256(-1));
     }
 
     function activate() public ownerOnly(){
-        require (!isActive && contributors.length == 0 && block.timestamp >= refundsAllowedUntil, "Already activated");     
+        require (!isActive && contributors.length == 0 && block.timestamp >= refundsAllowedUntil, "Already activated");
+        uint256 arf = BOOK.totalSupply();
         require (BOOK.balanceOf(address(this)) == BOOK.totalSupply(), "Missing supply");
 
         isActive = true;
@@ -184,7 +187,7 @@ contract SBGE {
             uint256 reserveDAI = tokenReserves[address(dai)];
             require(balanceDAINew > reserveDAI, "No good");
             require(reserveDAI.add(amountOut) <= balanceDAINew, "Too small... ;)");
-            tokenReserves[WETH] = balanceDAINew;
+            tokenReserves[address(WETH)] = balanceDAINew;
             totalDAIContribution += amountOut;
             daiContribution[msg.sender] += amountOut;
         }
@@ -208,29 +211,30 @@ contract SBGE {
     function sellTokenForDAI(address _token, uint256 _amount, bool _from) internal returns (uint256 daiAmount){
         address pairWithDAI = IUniswapV2Factory(uniswapV2Factory).getPair(_token, address(dai));
         require(pairWithDAI != address(0), "Unsellable Token Contributed. We no want your shitcoin");
-
+        
         IERC20 token = IERC20(_token);
         IUniswapV2Pair pair = IUniswapV2Pair(pairWithDAI); 
 
-        uint256 DAIReservePresale = token.balanceOf(pairWithDAI);
+        uint256 tokenReservePresale = token.balanceOf(pairWithDAI);
+
         if(_from) {
-            TransferHelper.safeTransferFrom(_token, msg.sender, pairWithDAI, _amount); // re
+            TransferHelper.safeTransferFrom(_token, msg.sender, pairWithDAI, _amount);
         } else {
             TransferHelper.safeTransfer(_token, pairWithDAI, _amount);
         }
-        uint256 DAIReservePostsale = token.balanceOf(pairWithDAI);
+        uint256 tokenReservePostsale = token.balanceOf(pairWithDAI);
         (uint256 reserve0, uint256 reserve1, ) = pair.getReserves();
 
-        uint256 delta = DAIReservePostsale.sub(DAIReservePresale, "Subtraction is hard");
-
+        uint256 delta = tokenReservePostsale.sub(tokenReservePresale, "Subtraction is hard");
         if(pair.token0() == _token) {                  
             daiAmount = getAmountOut(delta, reserve0, reserve1);
             require(daiAmount < reserve1.mul(30).div(100), "Too much slippage in selling");
             pair.swap(0, daiAmount, address(this), "");
         } else {
             daiAmount = getAmountOut(delta, reserve1, reserve0);
-            pair.swap(daiAmount, 0, address(this), "");
+            
             require(daiAmount < reserve0.mul(30).div(100), "Too much slippage in selling");
+            pair.swap(daiAmount, 0, address(this), "");
         }
     }
     
@@ -249,13 +253,13 @@ contract SBGE {
         if ( oldContribution == 0 ) {
             contributors.push(msg.sender);
         }
-        uint256 oldBalance = weth.balanceOf(address(this));
-        weth.deposit(msg.value);
-        uint256 newBalance = weth.balanceOf(address(this));
+        uint256 oldBalance = WETH.balanceOf(address(this));
+        WETH.deposit{value : msg.value}();
+        uint256 newBalance = WETH.balanceOf(address(this));
         require(newBalance > oldBalance, 'No wETH received from wrap');
 
         uint256 wETHamt = newBalance.sub(oldBalance);
-        uint256 amountOut = sellTokenForDAI(weth, wETHamt, true);
+        uint256 amountOut = sellTokenForDAI(address(WETH), wETHamt, false);
 
         require(amountOut > 0, 'No DAI received from sale');
         daiContribution[msg.sender] += amountOut;
@@ -283,6 +287,7 @@ contract SBGE {
     function distribute() internal {
         require (!distributionComplete, "Distribution complete");
         uint256 totalDAI = totalDAIContribution;
+        console.log('total: %s',totalDAI);
         require (totalDAI > 0, "Sad...");
         distributionComplete = true;
         totalDAICollected = totalDAI;
@@ -295,7 +300,6 @@ contract SBGE {
         preBuyForGroup(totalDAI);
 
         dai.transfer(owner, dai.balanceOf(address(this)));
-
   
         portal.setUnrestricted(false);
     }
@@ -334,7 +338,7 @@ contract SBGE {
 
         // Send BOOK
         TransferPortal portal = TransferPortal(address(BOOK.transferPortal()));
-        // portal.setUnrestricted(true);
+        portal.setUnrestricted(true);
 
         share = _contribution.mul(totalBOOKBought) / totalDAI;
         if (share > BOOK.balanceOf(address(this))) {

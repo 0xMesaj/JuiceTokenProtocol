@@ -2,8 +2,6 @@ const { expect } = require('chai');
 const { ethers } = require('hardhat');
 const { utils, BigNumber, constants } = require("ethers");
 const { createWETH, createUniswap } = require("./helpers.js");
-// const WBTC = artifacts.require('WBTC');
-
 
 describe('Book Protocol Sim', () => {
     let BOOK, bookLiquidityFactory, weth, wDAIContract, owner, mesaj, aOne, aTwo, aThree, aFour, aFive;
@@ -22,8 +20,9 @@ describe('Book Protocol Sim', () => {
         BookTreasuryFactory = await ethers.getContractFactory('BookTreasury');
         SportsBookFactory = await ethers.getContractFactory('TestSportsBook');
         BookVaultFactory = await ethers.getContractFactory('BookVault');
+        BookSwapFactory = await ethers.getContractFactory('BookSwap');
         
-        [owner, mesaj, lpMan, aOne, aTwo, aThree, aFour, aFive, _] = await ethers.getSigners();
+        [owner, mesaj, lpMan, ethMan, aOne, aTwo, aThree, aFour, aFive, _] = await ethers.getSigners();
 
        
     });
@@ -35,9 +34,6 @@ describe('Book Protocol Sim', () => {
     }); 
 
     it('Sim', async () => {
-        // console.log("Router Address = "+uniswap.router.address)
-        // console.log("Factory Address = "+uniswap.factory.address)
-        // console.log("WBTC Address = "+uniswap.wbtc.address)
         //Deploy
         const BOOKtoken = await BOOK.deploy("BOOK Token","BOOK");
         const BookVault = await BookVaultFactory.deploy(BOOKtoken.address);
@@ -45,11 +41,11 @@ describe('Book Protocol Sim', () => {
         const DAItoken = await uniswap.dai;     
         const BookLiqCalculator = await BookLiqCalculatorFactory.deploy(BOOKtoken.address, uniswap.factory.address);
         await BOOKtoken.setTransferPortal(portal.address);
-        const SportsBook = await SportsBookFactory.deploy(DAItoken.address); 
-        // const BookTreasury = await BookTreasuryFactory.deploy(SportsBook.address,DAItoken.address,BOOKtoken.address, BookLiqCalculator.address, uniswap.factory.address, uniswap.router.address)
+        // const SportsBook = await SportsBookFactory.deploy(DAItoken.address); 
         const BookTreasury = await BookTreasuryFactory.deploy(BOOKtoken.address, BookLiqCalculator.address, uniswap.factory.address, uniswap.router.address)
-
         const wDAI = await wDAIContract.deploy(DAItoken.address, BookTreasury.address, "wDAI", "wDAI");
+        const BookSwap = await BookSwapFactory.deploy(BOOKtoken.address,wDAI.address,uniswap.router.address)
+
         await BookTreasury.connect(owner).setWDAI(wDAI.address);
         // await SportsBook.connect(mesaj).setTreasury(BookTreasury.address);
         
@@ -61,10 +57,10 @@ describe('Book Protocol Sim', () => {
         await wDAI.connect(owner).promoteQuaestor(owner.address,true);
         await wDAI.connect(owner).setLiquidityCalculator(BookLiqCalculator.address);
         //Mint DAI to addresses to contribute to SBGE
-        await DAItoken.connect(owner).mint(aTwo.address, 30000);
-        await DAItoken.connect(owner).mint(aThree.address, 10000000);
-        await DAItoken.connect(owner).mint(aFour.address, 100000);
-        await DAItoken.connect(owner).mint(aFive.address, 300000);
+        await DAItoken.connect(owner).mint(aTwo.address, utils.parseEther("30000"));
+        await DAItoken.connect(owner).mint(aThree.address, utils.parseEther("10000000"));
+        await DAItoken.connect(owner).mint(aFour.address, utils.parseEther("100000"));
+        await DAItoken.connect(owner).mint(aFive.address, utils.parseEther("300000"));
 
         await weth.connect(mesaj).deposit({ value: utils.parseEther("50") });
         const WETHWBTC = uniswap.pairFor(await uniswap.factory.getPair(weth.address, uniswap.wbtc.address));
@@ -76,88 +72,86 @@ describe('Book Protocol Sim', () => {
         await uniswap.wbtc.connect(lpMan).approve(uniswap.router.address, constants.MaxUint256);
         await uniswap.router.connect(lpMan).swapExactTokensForTokens(15, 0, [weth.address, uniswap.wbtc.address], lpMan.address, 2e9);
 
-        // console.log("BEFORE lpMan LP TOKEN BALANCE : "+await WETHWBTC.balanceOf(lpMan.address))
-        // console.log("BEFORE lpMan WBTC BALANCE : "+await uniswap.wbtc.balanceOf(lpMan.address))
+        //LP man does LP man type things
         const wbtcBal = await uniswap.wbtc.balanceOf(lpMan.address)
         const wethBal = await weth.balanceOf(lpMan.address)
         await uniswap.router.connect(lpMan).addLiquidity(weth.address,uniswap.wbtc.address,wethBal,wbtcBal,0,0,lpMan.address,2e9)
-        // console.log("AFTER lpMan LP TOKEN BALANCE : "+await WETHWBTC.balanceOf(lpMan.address))
-        // console.log("AFTER lpMan WBTC BALANCE : "+await uniswap.wbtc.balanceOf(lpMan.address))
-        
+
         //Transfer Total BOOK Supply to SBGE
-        await BOOKtoken.connect(owner).transfer(sbge.address, 28000000);
+        await BOOKtoken.connect(owner).transfer(sbge.address, utils.parseEther("28000000"));
 
         await sbge.connect(owner).setupBOOKwdai();
-
         const BOOKwdai = uniswap.pairFor(await uniswap.factory.getPair(wDAI.address, BOOKtoken.address));
 
         await portal.connect(owner).allowPool(wDAI.address);
         await portal.connect(owner).setUnrestrictedController(sbge.address, true);
 
-        const sbgeBalance = await BOOKtoken.balanceOf(sbge.address);
-        expect(await BOOKtoken.totalSupply()).to.equal(sbgeBalance);
+   
 
         //activate SBGE
         await uniswap.wbtc.approve(sbge.address, constants.MaxUint256, { from: owner.address });
         await sbge.connect(owner).activate();
         
+        //Approvals For Transfers
+        await DAItoken.connect(owner).approve(BookSwap.address,constants.MaxUint256);
+        await BOOKtoken.connect(owner).approve(BookSwap.address,constants.MaxUint256);
         await DAItoken.connect(aThree).approve(sbge.address,constants.MaxUint256);
         await DAItoken.connect(aFour).approve(sbge.address,constants.MaxUint256);
         await DAItoken.connect(aFive).approve(sbge.address,constants.MaxUint256);
         await uniswap.wbtc.connect(mesaj).approve(sbge.address,constants.MaxUint256);
         await weth.connect(mesaj).approve(sbge.address,constants.MaxUint256);
-        await BOOKwdai.connect(aThree).approve(BookVault.address,constants.MaxUint256);  //for staking to vault
+        await BOOKwdai.connect(aThree).approve(BookVault.address,constants.MaxUint256);
         await BOOKwdai.connect(aFour).approve(BookVault.address,constants.MaxUint256);
         await BOOKwdai.connect(aFive).approve(BookVault.address,constants.MaxUint256);
         await BOOKwdai.connect(mesaj).approve(BookVault.address,constants.MaxUint256);
         await WETHWBTC.connect(lpMan).approve(sbge.address,constants.MaxUint256);
-        
-        await sbge.connect(aThree).contributeDAI(10000000);
-        await sbge.connect(aFour).contributeDAI(100000);
-        await sbge.connect(aFive).contributeDAI(300000);
+        await BOOKtoken.connect(aTwo).approve(uniswap.router.address, constants.MaxUint256);
+        await DAItoken.connect(aTwo).approve(wDAI.address,constants.MaxUint256);
+        await wDAI.connect(aTwo).approve(uniswap.router.address, constants.MaxUint256);
 
-        /* ~Test Contributing Token othan than DAI or UNI/Sushi LP Token~ */
-        // console.log("SBGE DAI BALANCE PRE WBTC SALE : "+await DAItoken.balanceOf(sbge.address))
-        // console.log("MESAJ wbtc BALANCE: "+await uniswap.wbtc.balanceOf(mesaj.address))
-        await sbge.connect(mesaj).contributeToken(weth.address,5);
-        // console.log("SBGE DAI BALANCE POST WBTC SALE: "+await DAItoken.balanceOf(sbge.address))
-        //console.log("MESAJ SBGE CONTRIBUTION POST WBTC SALE: "+ await sbge.connect(mesaj).daiContribution(mesaj.address))
 
-        console.log("lpMan SBGE CONTRIBUTION PRE: "+ await sbge.connect(lpMan).daiContribution(lpMan.address))
+        //DAI Contribution Test
+        await sbge.connect(aThree).contributeDAI(utils.parseEther("10000000"));
+        await sbge.connect(aFour).contributeDAI(utils.parseEther("100000"));
+        await sbge.connect(aFive).contributeDAI(utils.parseEther("300000"));
+
+        expect(await sbge.daiContribution(aThree.address)).to.equal(utils.parseEther("10000000"));
+        expect(await sbge.daiContribution(aFour.address)).to.equal(utils.parseEther("100000"));
+        expect(await sbge.daiContribution(aFive.address)).to.equal(utils.parseEther("300000"));
+
+        //ETH Contribution Test
+        await ethMan.sendTransaction({ to: sbge.address, value: utils.parseEther("2") })
+    
+        //WETH Contribution Test
+        await sbge.connect(mesaj).contributeToken(weth.address,utils.parseEther("2"));
+
+        //LP Token Contribution Test
         await sbge.connect(lpMan).contributeToken(WETHWBTC.address,await WETHWBTC.balanceOf(lpMan.address));
-        console.log("lpMan SBGE CONTRIBUTION POST: "+ await sbge.connect(lpMan).daiContribution(lpMan.address))
-
-        expect(await sbge.daiContribution(aThree.address)).to.equal(10000000);
-        expect(await sbge.daiContribution(aFour.address)).to.equal(100000);
-        expect(await sbge.daiContribution(aFive.address)).to.equal(300000);
 
         const sbgeDAIbalance = await DAItoken.balanceOf(sbge.address);
-        console.log("SBGE Balance="+sbgeDAIbalance)
+        console.log("SBGE Balance="+ utils.parseEther(''+sbgeDAIbalance))
 
-        //aTwo wraps 30k DAI into 30k wDAI and buys BOOK from LP
-        await DAItoken.connect(aTwo).approve(wDAI.address,constants.MaxUint256);
-        await wDAI.connect(aTwo).deposit(30000);
-        await wDAI.connect(aTwo).approve(uniswap.router.address, constants.MaxUint256);
-        await BOOKtoken.connect(aTwo).approve(uniswap.router.address, constants.MaxUint256);
+       
+        // wrap 30k DAI into wDAI
+        await wDAI.connect(aTwo).deposit(utils.parseEther("30000"));
         
         // await TransferPortal.connect(owner).allowPool(wDAI.address);
-    
-        // expect(await wDAI.balanceOf(aTwo.address)).to.equal(10000);
 
         //End SBGE
         await sbge.connect(owner).complete();
 
+        //Init Book Transfer Portal
         await BOOKtoken.setTransferPortal(portal.address);
         await portal.connect(owner).setParameters(owner.address, BookVault.address, 100, 10);
-        
-        await uniswap.router.connect(aTwo).swapExactTokensForTokensSupportingFeeOnTransferTokens(10000, 0, [wDAI.address, BOOKtoken.address], aTwo.address, 2e9);
-        await uniswap.router.connect(aTwo).swapExactTokensForTokensSupportingFeeOnTransferTokens(10000, 0, [wDAI.address, BOOKtoken.address], aTwo.address, 2e9);
-       
+
+        //Buy BOOK with wDAI
+        await uniswap.router.connect(aTwo).swapExactTokensForTokensSupportingFeeOnTransferTokens(utils.parseEther("10000"), 0, [wDAI.address, BOOKtoken.address], aTwo.address, 2e9);
+        await uniswap.router.connect(aTwo).swapExactTokensForTokensSupportingFeeOnTransferTokens(utils.parseEther("10000"), 0, [wDAI.address, BOOKtoken.address], aTwo.address, 2e9);
         //aTwo sells BOOK for wDAI
         await uniswap.router.connect(aTwo).swapExactTokensForTokensSupportingFeeOnTransferTokens(await BOOKtoken.balanceOf(aTwo.address), 0, [BOOKtoken.address,wDAI.address], aTwo.address, 2e9);
         
         //Buy 10k wDAI worth of BOOK and then send it to aFive
-        await uniswap.router.connect(aTwo).swapExactTokensForTokensSupportingFeeOnTransferTokens(10000, 0, [wDAI.address, BOOKtoken.address], aTwo.address, 2e9);
+        await uniswap.router.connect(aTwo).swapExactTokensForTokensSupportingFeeOnTransferTokens(utils.parseEther("10000"), 0, [wDAI.address, BOOKtoken.address], aTwo.address, 2e9);
         await BOOKtoken.connect(aTwo).transfer(aFive.address, await BOOKtoken.balanceOf(aTwo.address))
 
         //SBGE Contributors claim LP tokens and BOOK
@@ -166,32 +160,26 @@ describe('Book Protocol Sim', () => {
         await sbge.connect(aFive).claim();
         await sbge.connect(mesaj).claim();
 
-        
+        //Create BOOK-wDAI pool to Vault
         await BookVault.connect(owner).addPool(10, BOOKwdai.address)
-        // console.log("Pool Info Token="+(await BookVault.poolInfo(0)))
         expect(await BookVault.poolInfoCount()).to.equal(1);
-
+        
+        //Stake LP tokens to Vault
         const aThreeStakeAmt = await BOOKwdai.balanceOf(aThree.address);
         await BookVault.connect(aThree).deposit(0,aThreeStakeAmt)
         await BookVault.connect(aFour).deposit(0,await BOOKwdai.balanceOf(aFour.address))
         await BookVault.connect(aFive).deposit(0,await BOOKwdai.balanceOf(aFive.address))
         await BookVault.connect(mesaj).deposit(0,await BOOKwdai.balanceOf(mesaj.address))
 
-        // console.log("Final Owner DAI Balance="+await DAItoken.balanceOf(owner.address))
-        // console.log("Final wDAI Contract DAI Balance="+await DAItoken.balanceOf(wDAI.address))
-
-        // await BookTreasury.connect(owner).sendToken(DAItoken.address, SportsBook.address,await DAItoken.balanceOf(BookTreasury.address))
-
-        // console.log("Final SportsBook DAI Balance="+await DAItoken.balanceOf(SportsBook.address))
+        //Send accessible DAI liquidity to Treasury
         await wDAI.connect(owner).fund(BookTreasury.address)
-        console.log("Final Treasury DAI Token Balance="+await DAItoken.balanceOf(BookTreasury.address))
+        const final = await DAItoken.balanceOf(BookTreasury.address)
+        console.log("Final Treasury DAI Token Balance="+final/10e18)
 
-        await uniswap.router.connect(aTwo).swapExactTokensForTokensSupportingFeeOnTransferTokens(10000, 0, [wDAI.address, BOOKtoken.address], aTwo.address, 2e9);
+        await uniswap.router.connect(aTwo).swapExactTokensForTokensSupportingFeeOnTransferTokens(utils.parseEther("10000"), 0, [wDAI.address, BOOKtoken.address], aTwo.address, 2e9);
         await BOOKtoken.connect(aTwo).transfer(aFive.address, await BOOKtoken.balanceOf(aTwo.address))
 
         // console.log("aThree Pending Reward=" + await BookVault.pendingReward(0,aThree.address))
-
-        // await BookVault.updatePool(0);
 
         //aThree Withdraws from Vault - Should receive Book Token Reward
         const pre = await BOOKtoken.balanceOf(aThree.address);
@@ -199,10 +187,12 @@ describe('Book Protocol Sim', () => {
         const post = await BOOKtoken.balanceOf(aThree.address);
         expect(post > pre);
 
-        //Place a Bet
-        // await SportsBook.connect(mesaj).bet('0x0efcbf1a844424573dd8de90cc11d9ff','15793','5',100,3);
-        // await SportsBook.connect(mesaj).betParlay('0x0efcbf1a844424573dd8de90cc11d9ff',123,[123456789,987654321,123456789,123456789,987654321,123456789,123456789],[4444456789,987654321,123456789,123456789,987654321,123456789,123456789],
-        // [333456789,987654321,123456789,123456789,987654321,123456789,123456789])
+        //Test Book Swap
+        await portal.connect(owner).setFreeParticipant(BookSwap.address,true)
+        await DAItoken.connect(owner).mint(owner.address, utils.parseEther("10000000"))
+        await BookSwap.connect(owner).buyBookwithDAI(utils.parseEther("10000"))
+        await BookSwap.connect(owner).sellBookforDAI(utils.parseEther("10000"))
+
     }); 
 
   
