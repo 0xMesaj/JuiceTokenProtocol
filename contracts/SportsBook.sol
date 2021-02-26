@@ -125,7 +125,7 @@ contract SportsBook is ChainlinkClient  {
 
             //transfer win amount to b.creator
             delete bets[_betID];
-            uint256 winAmt = amt.mul(odds)/100;
+            uint256 winAmt = amt.div(100).mul(odds);
             dai.transfer(creator, winAmt);
             emit BetPayout(_betID);
         }
@@ -140,7 +140,7 @@ contract SportsBook is ChainlinkClient  {
         strings.slice[] memory os = new strings.slice[](o.count(delim) + 1);
         
         bool win = true;
-        for(uint i = 0; i < p.indexes.length; i++){
+        for(uint i = 0; i < os.length-1; i++){
             int ans = computeResult(uint256(stringToBytes32(p.indexes[i])),uint256(stringToBytes32(p.selections[i])), int256(stringToBytes32(p.rules[i])));
             if(ans == 0){
                 win = false;
@@ -158,7 +158,8 @@ contract SportsBook is ChainlinkClient  {
             address creator = p.creator;
 
             delete parlays[_betID];
-            dai.transfer(creator, amt.mul(odds)/100);
+            uint256 winAmt = amt.div(100).mul(odds);
+            dai.transfer(creator, winAmt);
             emit BetPayout(_betID);
         }
     }
@@ -221,7 +222,7 @@ contract SportsBook is ChainlinkClient  {
         strings.slice memory delim = ",".toSlice();
         string[] memory indexes = new string[](s.count(delim) + 1);
 
-        require(indexes.length < 6, 'Parlay too large');
+        require(indexes.length < 8, 'Parlay too large');
 
         for(uint i = 0; i < indexes.length; i++) {
            indexes[i] = s.split(delim).toString();
