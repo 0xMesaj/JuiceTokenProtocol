@@ -26,6 +26,7 @@ contract SportsBook is ChainlinkClient  {
     event BetRequested(bytes32 betID,bytes16 betRef);
     event BetAccepted(bytes32 betID,uint256 odds);
     event BetPayout(bytes32 betID);
+    event BetPush(bytes32 betID);
     event BetRejected(bytes32 betID);
     event ParlayAccepted(bytes32 betID,bytes32 odds);
     
@@ -118,7 +119,8 @@ contract SportsBook is ChainlinkClient  {
         require(_betID != 0x0, "Invalid Bet Reference");
         require(b.timestamp>matchCancellationTimestamp[b.index], 'Match is invalid');
 
-        if(computeResult(b.index,b.selection,b.rule) == 1){
+        uint256 result = computeResult(b.index,b.selection,b.rule);
+        if( result == 1){
             uint256 amt = b.amount;
             uint256 odds = b.odds;
             address creator = b.creator;
@@ -128,6 +130,16 @@ contract SportsBook is ChainlinkClient  {
             uint256 winAmt = amt.div(100).mul(odds);
             dai.transfer(creator, winAmt);
             emit BetPayout(_betID);
+        }
+        else if(result == 2){
+            uint256 pushAmt = b.amount;
+            uint256 odds = b.odds;
+            address creator = b.creator;
+
+            //transfer win amount to b.creator
+            delete bets[_betID];
+            dai.transfer(creator, pushAmt);
+            emit BetPush(_betID);
         }
     }
     
@@ -141,7 +153,10 @@ contract SportsBook is ChainlinkClient  {
         
         bool win = true;
         for(uint i = 0; i < os.length-1; i++){
-            int ans = computeResult(uint256(stringToBytes32(p.indexes[i])),uint256(stringToBytes32(p.selections[i])), int256(stringToBytes32(p.rules[i])));
+            uint ans = computeResult(uint256(stringToBytes32(p.indexes[i])),uint256(stringToBytes32(p.selections[i])), int256(stringToBytes32(p.rules[i])));
+            if(i==0){
+                ans = 2;
+            }
             if(ans == 0){
                 win = false;
             }
@@ -293,43 +308,46 @@ contract SportsBook is ChainlinkClient  {
         wards[shame] = false;
     }
 
-    function computeResult( uint256 _index, uint256 _selection, int256 _rule ) internal view returns(int win){
+    /*
+        Returns 1 for win, 2 for push
+    */
+    function computeResult( uint256 _index, uint256 _selection, int256 _rule ) internal view returns(uint win){
         MatchScores memory m = matchResults[_index];
         
         uint256 home_score = bytesToUInt(stringToBytes32(m.homeScore));
-        uint256 away_score = bytesToUInt(stringToBytes32(m.homeScore));
+        uint256 away_score = bytesToUInt(stringToBytes32(m.awayScore));
         uint selection = _selection;
         int rule = _rule;
 
         if(selection == 0){
-              if( int(home_score.mul(10))+rule > int(away_score.mul(10)) ){
+            if( int(home_score*10)+rule > int(away_score*10) ){
                 win = 1;
             }
-            else if( int(home_score.mul(10)) + rule == int(away_score.mul(10)) ){
+            else if( int(home_score*10) + rule == int(away_score*10) ){
                 win = 2;
             }
         }
         else if(selection == 1){
-            if( (int(away_score.mul(10))+rule) > int(home_score.mul(10))){
+            if( (int(away_score*10)+rule) > int(home_score*10)){
                 win = 1;
             }
-            else if( (int(away_score.mul(10))+rule) == int(home_score.mul(10)) ){
+            else if( (int(away_score*10)+rule) == int(home_score*10) ){
                 win = 2;
             }
         }
         else if (selection == 2 ){
-            if(int((home_score.mul(10)) + (away_score.mul(10))) > rule){
+            if(int(home_score*10 + away_score*10) > rule){
                 win = 1;
             }
-            else if (int((home_score.mul(10)) + (away_score.mul(10))) == rule){
+            else if (int(home_score*10 + away_score*10) == rule){
                 win = 2;
             }
         }
         else if(selection == 3){
-            if(rule > int(home_score.mul(10) + away_score.mul(10))){
+           if(rule > int(home_score*10 + away_score*10)){
                 win = 1;
             }
-            else if (rule == int(home_score.mul(10) + away_score.mul(10))){
+            else if (rule == int(home_score*10 + away_score*10)){
                 win = 2;
             }
         }

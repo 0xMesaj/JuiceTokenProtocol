@@ -111,12 +111,6 @@ contract BookTreasury {
         BOOK.burn(BOOK.balanceOf(address(this)));
     }
 
-    // function addStrategy(address strategy) public isTreasurer(){
-    //     require(!strategies[strategy], 'Specified address is already a strategy');
-    //     strategies[strategy] = true;
-    //     DAI.approve(strategy,uint(-1));
-    // }
-
     function proposeStrategy(address _strategy) public isTreasurer(){
         uint _startBlock = block.number;
         uint _endBlock = _startBlock.add(5760);
@@ -177,7 +171,7 @@ contract BookTreasury {
     function judgeProposal(uint proposalID) public {
         Proposal storage p = proposals[proposalID];
         uint MIN_VOTES = getMinRequiredVotes();
-        require(block.timestamp > p.endBlock, 'Proposal is still ongoing');
+        require(block.timestamp > p.endBlock, 'Proposal Ongoing');
         if((p.forVotes > p.againstVotes) || p.againstVotes < MIN_VOTES){
             strategies[p.strategy] = true;
             DAI.approve(p.strategy,uint(-1));

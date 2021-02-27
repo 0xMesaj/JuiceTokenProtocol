@@ -1,10 +1,10 @@
 const { expect } = require('chai');
 const { ethers } = require('hardhat');
 const { utils, BigNumber, constants } = require("ethers");
-const { createWETH, createUniswap } = require("./helpers.js");
+const { createWETH, createUniswap } = require("../test/helpers.js");
 
 describe('Book Protocol Sim', () => {
-    let BOOK, bookLiquidityFactory, weth, wDAIContract, owner, mesaj, aOne, aTwo, aThree, aFour, aFive;
+    let owner, mesaj, aOne, aTwo, aThree, aFour, aFive;
     beforeEach(async () => {
         [owner, mesaj, aOne, aTwo, aThree, aFour, aFive] = await ethers.getSigners();
         weth = await createWETH();
@@ -13,8 +13,7 @@ describe('Book Protocol Sim', () => {
         DAI = await ethers.getContractFactory('Dai');
         wDAIContract = await ethers.getContractFactory('WDAI');
         BOOK = await ethers.getContractFactory('BookToken');
-        TransferPortalFactory = await ethers.getContractFactory('TransferPortal');   
-        bookLiquidityFactory = await ethers.getContractFactory("BookLiquidity");   
+        TransferPortalFactory = await ethers.getContractFactory('TransferPortal');    
         BookLiqCalculatorFactory = await ethers.getContractFactory("LockedLiqCalculator");  
         SBGEContractFactory = await ethers.getContractFactory('SBGE'); 
         BookTreasuryFactory = await ethers.getContractFactory('BookTreasury');
@@ -84,9 +83,7 @@ describe('Book Protocol Sim', () => {
         const BOOKwdai = uniswap.pairFor(await uniswap.factory.getPair(wDAI.address, BOOKtoken.address));
 
         await portal.connect(owner).allowPool(wDAI.address);
-        await portal.connect(owner).setUnrestrictedController(sbge.address, true);
-
-   
+        await portal.connect(owner).setController(sbge.address, true);
 
         //activate SBGE
         await uniswap.wbtc.approve(sbge.address, constants.MaxUint256, { from: owner.address });
@@ -188,7 +185,7 @@ describe('Book Protocol Sim', () => {
         expect(post > pre);
 
         //Test Book Swap
-        await portal.connect(owner).setFreeParticipant(BookSwap.address,true)
+        await portal.connect(owner).noTaxation(BookSwap.address,true)
         await DAItoken.connect(owner).mint(owner.address, utils.parseEther("10000000"))
         await BookSwap.connect(owner).buyBookwithDAI(utils.parseEther("10000"))
         await BookSwap.connect(owner).sellBookforDAI(utils.parseEther("10000"))

@@ -24,39 +24,39 @@ contract TestResolve{
         int rule = _rule;
 
         if(selection == 0){
-            if( int(home_score.mul(10))+rule > int(away_score.mul(10)) ){
+            if( int(home_score*10)+rule > int(away_score*10) ){
                 win = 1;
-                // console.log("win");
+                console.log("win");
             }
-            else if( int(home_score.mul(10)) + rule == int(away_score.mul(10)) ){
+            else if( int(home_score*10) + rule == int(away_score*10) ){
                 win = 2;
-                // console.log("draw");
+                console.log("draw");
             }
             else{
                 win = 0;
-                // console.log("loss");
+                console.log("loss");
             }
         }
         else if(selection == 1){
-            if( (int(away_score.mul(10))+rule) > int(home_score.mul(10))){
-                // console.log("win");
+            if( (int(away_score*10)+rule) > int(home_score*10)){
+                console.log("win");
                 win = 1;
             }
-            else if( (int(away_score.mul(10))+rule) == int(home_score.mul(10)) ){
+            else if( (int(away_score*10)+rule) == int(home_score*10) ){
                 win = 2;
-                // console.log("draw");
+                console.log("draw");
             }
             else{
                 win = 0;
-                // console.log("loss");
+                console.log("loss");
             }
         }
         else if (selection == 2 ){
-            if(int((home_score.mul(10)) + (away_score.mul(10))) > rule){
+            if(int(home_score*10 + away_score*10) > rule){
                 win = 1;
                 // console.log("win");
             }
-            else if (int((home_score.mul(10)) + (away_score.mul(10))) == rule){
+            else if (int(home_score*10 + away_score*10) == rule){
                 win = 2;
                 // console.log("draw");
             }
@@ -66,11 +66,11 @@ contract TestResolve{
             }
         }
         else if(selection == 3){
-            if(rule > int(home_score.mul(10) + away_score.mul(10))){
+            if(rule > int(home_score*10 + away_score*10)){
                 win = 1;
                 // console.log("win");
             }
-            else if (rule == int(home_score.mul(10) + away_score.mul(10))){
+            else if (rule == int(home_score*10 + away_score*10)){
                 win = 2;
                 // console.log("draw");
             }

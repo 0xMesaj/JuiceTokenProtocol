@@ -15,7 +15,6 @@ contract BookToken is ERC20{
     address public owner;
     ITransferPortal public transferPortal;
 
-
     modifier ownerOnly(){
         require (msg.sender == owner, "Owner only");
         _;
@@ -30,8 +29,7 @@ contract BookToken is ERC20{
         transferPortal = _transferPortal;
     }
 
-    function _transfer(address sender, address recipient, uint256 amount) internal override virtual 
-    {
+    function _transfer(address sender, address recipient, uint256 amount) internal override virtual {
         require(sender != address(0), "ERC20: transfer from the zero address");
         require(recipient != address(0), "ERC20: transfer to the zero address");
 

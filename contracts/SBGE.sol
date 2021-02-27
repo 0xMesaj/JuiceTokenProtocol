@@ -144,14 +144,13 @@ contract SBGE {
         //UNI or SUSHI LP Token
         if(token0 != address(0)) {
             address token1 = IUniswapV2Pair(_token).token1();
-            // console.log("token1=%s",token1);
-            // console.log("token0=%s",token0);
+
             console.log("factory=%s",address(uniswapV2Factory));
             bool isUniLP = IUniswapV2Factory(uniswapV2Factory).getPair(token1,token0) !=  address(0);
             // bool isSushiLP = IUniswapV2Factory(sushiswapFactory).getPair(token0,token1) !=  address(0);
             bool isSushiLP = false;
 
-            if(!isUniLP && !isSushiLP) { revert("LGE : LP Token type not accepted"); } // reverts here
+            if(!isUniLP && !isSushiLP) { revert("SBGE Error: LP Token Not Supported"); } // reverts here
             TransferHelper.safeTransferFrom(_token, msg.sender, _token, _amount);
             uint256 balanceToken0Before = IERC20(token0).balanceOf(address(this));
             uint256 balanceToken1Before = IERC20(token1).balanceOf(address(this));
@@ -173,7 +172,7 @@ contract SBGE {
 
             require(balanceDAINew > reserveDAI, "No good");
             uint256 totalDAIAdded = amountOutToken0.add(amountOutToken1);
-            require(tokenReserves[address(dai)].add(totalDAIAdded) <= balanceDAINew, "Too small... ;)");
+            require(tokenReserves[address(dai)].add(totalDAIAdded) <= balanceDAINew, "DAI Received From Sale Insufficient");
             tokenReserves[address(dai)] = balanceDAINew;
            
             daiContribution[msg.sender] = daiContribution[msg.sender].add(totalDAIAdded);
@@ -186,7 +185,7 @@ contract SBGE {
             uint256 balanceDAINew = IERC20(dai).balanceOf(address(this));
             uint256 reserveDAI = tokenReserves[address(dai)];
             require(balanceDAINew > reserveDAI, "No good");
-            require(reserveDAI.add(amountOut) <= balanceDAINew, "Too small... ;)");
+            require(reserveDAI.add(amountOut) <= balanceDAINew, "DAI Received From Sale Insufficient");
             tokenReserves[address(WETH)] = balanceDAINew;
             totalDAIContribution += amountOut;
             daiContribution[msg.sender] += amountOut;
@@ -293,7 +292,7 @@ contract SBGE {
         totalDAICollected = totalDAI;
 
         TransferPortal portal = TransferPortal(address(BOOK.transferPortal()));
-        portal.setUnrestricted(true);
+        portal.setFreeTransfers(true);
 
         createBOOKwdaiLiquidity(totalDAI);
         createDAILiquidity(totalDAI);
@@ -301,7 +300,7 @@ contract SBGE {
 
         dai.transfer(owner, dai.balanceOf(address(this)));
   
-        portal.setUnrestricted(false);
+        portal.setFreeTransfers(false);
     }
 
     function createDAILiquidity(uint256 totalDAI) internal {
@@ -338,7 +337,7 @@ contract SBGE {
 
         // Send BOOK
         TransferPortal portal = TransferPortal(address(BOOK.transferPortal()));
-        portal.setUnrestricted(true);
+        portal.setFreeTransfers(true);
 
         share = _contribution.mul(totalBOOKBought) / totalDAI;
         if (share > BOOK.balanceOf(address(this))) {
@@ -346,7 +345,7 @@ contract SBGE {
         }
         BOOK.transfer(_to, share);
 
-        portal.setUnrestricted(false);
+        portal.setFreeTransfers(false);
     }
 
     

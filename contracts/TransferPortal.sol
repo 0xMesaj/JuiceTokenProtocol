@@ -59,8 +59,8 @@ contract TransferPortal is ITransferPortal{
     IERC20[] public allowedPoolTokens;
     
     bool public unrestricted;
-    mapping (address => bool) public unrestrictedControllers;
-    mapping (address => bool) public freeParticipant;
+    mapping (address => bool) public taxationController;
+    mapping (address => bool) public taxation;
 
     mapping (address => uint256) public liquiditySupply;
     address public mustUpdate;    
@@ -75,16 +75,16 @@ contract TransferPortal is ITransferPortal{
 
     function allowedPoolTokensCount() public view returns (uint256) { return allowedPoolTokens.length; }
 
-    function setUnrestrictedController(address unrestrictedController, bool allow) public ownerOnly(){
-        unrestrictedControllers[unrestrictedController] = allow;
+    function setController(address unrestrictedController, bool allow) public ownerOnly(){
+        taxationController[unrestrictedController] = allow;
     }
 
-    function setFreeParticipant(address participant, bool free) public ownerOnly(){
-        freeParticipant[participant] = free;
+    function noTaxation(address addr, bool isTaxFree) public ownerOnly(){
+        taxation[addr] = isTaxFree;
     }
 
-    function setUnrestricted(bool _unrestricted) public {
-        require (unrestrictedControllers[msg.sender], "Not an unrestricted controller");
+    function setFreeTransfers(bool _unrestricted) public {
+        require (taxationController[msg.sender], "Only callable by tax controllers");
         unrestricted = _unrestricted;
     }
 
@@ -165,13 +165,11 @@ contract TransferPortal is ITransferPortal{
             }
             require (IERC20(from).totalSupply() >= liquiditySupply[from], "Cannot remove liquidity");            
         }
-        if (unrestricted || freeParticipant[from]) {
+        if (unrestricted || taxation[from]) {
             return new TransferPortalTarget[](0);
         }
         BOOKTransferPortalParameters memory params = parameters;
 
-
-        // burn = amount * params.burnRate / 10000;
         targets = new TransferPortalTarget[]((params.devRewardRate > 0 ? 1 : 0) + (params.vaultRewardRate > 0 ? 1 : 0));
         uint256 index = 0;
         if (params.vaultRewardRate > 0) {

@@ -2,7 +2,6 @@ const { expect } = require('chai');
 const { ethers } = require('hardhat');
 const { utils, constants } = require("ethers");
 
-// Use the TestResolve Smart Contract to test Logic of wager resolution, including edge cases
 
 describe('Test Parlay Resolutions', () => {
     let  owner, addr1, addr2;
