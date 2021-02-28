@@ -26,77 +26,107 @@ contract TestParlay{
         
         string[] indexes;
         string[] selections;
-        string[] rules;
+        int[] rules;
     }
 
     mapping(bytes32 => Parlay ) public parlays;
 
 
-    constructor(TestToken _dai,string[] memory ind,string[] memory sel, string[] memory rul) public{
+    constructor(TestToken _dai,string[] memory ind,string[] memory sel, int[] memory rul) public{
         dai = _dai;
         dai.mint(address(this),12300000000);
         Parlay storage p = parlays[0x3139352c3335322c313832000000001230000000000000000000000000000000];
-        p.odds = 0x3139352c3335322c313832000000000000000000000000000000000000000000;
-        
+        p.odds = 0x3135352c31393300000000000000000000000000000000000000000000000000;
+        p.amount = 50;
         p.indexes = ind;
         p.selections = sel;
         p.rules = rul;
 
     }
+    function int2str(int i) internal pure returns (string memory){
+    if (i == 0) return "0";
+    bool negative = i < 0;
+    uint j = uint(negative ? -i : i);
+    uint l = j;     // Keep an unsigned copy
+    uint len;
+    while (j != 0){
+        len++;
+        j /= 10;
+    }
+    if (negative) ++len;  // Make room for '-' sign
+    bytes memory bstr = new bytes(len);
+    uint k = len - 1;
+    while (l != 0){
+        bstr[k--] = byte(uint8(48 + l % 10));
+        l /= 10;
+    }
+    if (negative) {    // Prepend '-'
+        bstr[0] = '-';
+    }
+    return string(bstr);
+}
 
-   
-    function resolveParlay( bytes32 _betID ) public {
+    function buildParlay(string memory _indexes, string memory _selections, int[] memory _rules) public returns (bytes32 _queryID){
+        string memory s;
+        for(uint i = 0; i < _rules.length; i++){
+            uint x = uint(_rules[i]);
+            // s[i] = bytes32ToString(bytes32(x));
+            if(i!=0){
+                s = s.toSlice().concat(','.toSlice());
+            }
+            s = s.toSlice().concat(int2str(_rules[i]).toSlice()); // "abcdef"
+        }
+
+        console.log(s);
+
+    }
+
+       function resolveParlay( bytes32 _betID ) public {
         Parlay memory p = parlays[_betID];
         require(_betID != 0x0, "Invalid Bet Reference");
-
-       
+        
         strings.slice memory o = bytes32ToString(p.odds).toSlice();
         strings.slice memory delim = ",".toSlice();
         strings.slice[] memory os = new strings.slice[](o.count(delim) + 1);
-
-        // bytes32 odds = p.odds;rules
-
+        
         bool win = true;
-
-        for(uint i = 0; i < os.length-1; i++){
-            bytes32 test = stringToBytes32(p.indexes[i]);
-            bytes32 test1 = stringToBytes32(p.selections[i]);
-            bytes32 test2 = stringToBytes32(p.rules[i]);
-
-            int ans = computeResult(uint(stringToBytes32(p.indexes[i])),uint(stringToBytes32(p.selections[i])), int(stringToBytes32(p.rules[i])));
-            if(i==0){
-                ans = 2;
-            }
+        for(uint i = 0; i < os.length; i++){
+            uint ans = computeResult(bytesToUInt(stringToBytes32(p.indexes[i])),bytesToUInt(stringToBytes32(p.selections[i])), p.rules[i]);
             if(ans == 0){
                 win = false;
             }
-            else if(ans == 2){
+            else if(ans == 2 ){
                 os[i] = '100'.toSlice();
             }
             else{
                 os[i] = o.split(delim);
             }
+ 
         }     
        
         if(win){
             uint256 odds = calculateParlayOdds(os);
-            uint256 amt = 5;
-            address creator = msg.sender;
-            uint payout = amt.mul(odds).div(100);
-            // delete parlays[_betID];
-            console.log('odds: %s', odds);
-            console.log('transfering: %s', payout);
-            dai.transfer(msg.sender, payout);
+            uint256 amt = p.amount;
+            address creator = p.creator;
+        
+            console.log(odds);
+            delete parlays[_betID];
+            uint256 winAmt = amt.mul(odds).div(100);
+            console.log(winAmt);
+  
         }
     }
 
 
-
-    function computeResult( uint256 _index, uint256 _selection, int256 _rule ) internal view returns(int win){
+    function computeResult( uint256 _index, uint256 _selection, int256 _rule ) internal view returns(uint win){
         // MatchScores memory m = matchResults[_index];
-        console.log("yoo");
-        uint256 home_score = bytesToUInt(stringToBytes32("123"));
-        uint256 away_score = bytesToUInt(stringToBytes32("120"));
+        uint256 home_score = bytesToUInt(stringToBytes32("100"));
+        uint256 away_score = bytesToUInt(stringToBytes32("80"));
+
+        // console.log('_index: %s', _index);
+        // console.log('_selection: %s', _selection);
+        // console.logInt(_rule);
+
         uint selection = _selection;
         int rule = _rule;
 
@@ -141,7 +171,9 @@ contract TestParlay{
             }
         }
         else if (selection == 5 ){
+           
             if(away_score > home_score){
+            
                 win = 1;
             }
             else if(away_score == home_score){
@@ -150,8 +182,7 @@ contract TestParlay{
         }
     }
 
-
-    function bytesToUInt(bytes32 v) internal pure returns (uint ret) {
+       function bytesToUInt(bytes32 v) internal pure returns (uint ret) {
         if (v == 0x0) {
             revert();
         }
@@ -169,14 +200,16 @@ contract TestParlay{
         }
         return ret;
     }
+
+
       
     
         /* Utilities */
     function calculateParlayOdds(strings.slice[] memory o) public returns (uint256 odds){
+       
         odds = 1;
         for(uint i=0;i < o.length; i++){
             if(i==0){
-                //  console.log('odds123: %s', stringToUint(o[i].toString()));
                 odds *= stringToUint(o[i].toString());
             }
             else{

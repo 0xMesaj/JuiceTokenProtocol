@@ -56,7 +56,7 @@ contract SportsBook is ChainlinkClient  {
         
         string[] indexes;
         string[] selections;
-        string[] rules;
+        int[] rules;
     }
 
     struct Delta{
@@ -99,7 +99,7 @@ contract SportsBook is ChainlinkClient  {
     bytes32 public betID;
     int256 MAX_BET;
     IERC20 dai;
-    bool allowWagers = false;
+    bool allowWagers;
 
 
     // constructor (IERC20 _DAI, address _treasury) public payable{ 
@@ -109,7 +109,8 @@ contract SportsBook is ChainlinkClient  {
         wards[mesaj] = true;
         setPublicChainlinkToken();
         // MAX_BET = _DAI.allowance(treasury,address(this));
-        
+
+        allowWagers = false;
         oracle = 0x4dfFCF075d9972F743A2812632142Be64CA8B0EE;
         dai = _DAI;
     }
@@ -127,7 +128,7 @@ contract SportsBook is ChainlinkClient  {
 
             //transfer win amount to b.creator
             delete bets[_betID];
-            uint256 winAmt = amt.div(100).mul(odds);
+            uint256 winAmt = amt.mul(odds).div(100);
             dai.transfer(creator, winAmt);
             emit BetPayout(_betID);
         }
@@ -153,27 +154,26 @@ contract SportsBook is ChainlinkClient  {
         
         bool win = true;
         for(uint i = 0; i < os.length-1; i++){
-            uint ans = computeResult(uint256(stringToBytes32(p.indexes[i])),uint256(stringToBytes32(p.selections[i])), int256(stringToBytes32(p.rules[i])));
-            if(i==0){
-                ans = 2;
-            }
+            uint ans = computeResult(bytesToUInt(stringToBytes32(p.indexes[i])),bytesToUInt(stringToBytes32(p.selections[i])), p.rules[i]);
+
             if(ans == 0){
                 win = false;
             }
-            else if(ans == 2 || p.timestamp>matchCancellationTimestamp[uint256(stringToBytes32(p.indexes[i]))]){
+            else if(ans == 2 || p.timestamp<matchCancellationTimestamp[uint256(stringToBytes32(p.indexes[i]))]){
                 os[i] = '100'.toSlice();
             }
             else{
                 os[i] = o.split(delim);
             }
         }     
+
         if(win){
             uint256 odds = calculateParlayOdds(os);
             uint256 amt = p.amount;
             address creator = p.creator;
 
             delete parlays[_betID];
-            uint256 winAmt = amt.div(100).mul(odds);
+            uint256 winAmt = amt.mul(odds).div(100);
             dai.transfer(creator, winAmt);
             emit BetPayout(_betID);
         }
@@ -225,7 +225,7 @@ contract SportsBook is ChainlinkClient  {
         emit BetRequested(_queryID, _betRef);
     }
 
-    function betParlay(bytes16 _betRef,uint _amount, string memory _indexes, string memory _selections, string memory _rules) public {
+    function betParlay(bytes16 _betRef,uint _amount, string memory _indexes, string memory _selections,  int[] memory _rules) public {
         require(allowWagers, 'Sports Book not currently accepting wagers');
         bytes32 _queryID = buildParlay(_indexes, _selections, _rules );
 
@@ -248,19 +248,13 @@ contract SportsBook is ChainlinkClient  {
         for(uint i = 0; i < selections.length; i++) {
            selections[i] = s.split(delim).toString();
         }
-        
-        s =  _rules.toSlice();
-        string[] memory rules = new string[](s.count(delim) + 1);
-        for(uint i = 0; i < rules.length; i++) {
-           rules[i] = s.split(delim).toString();
-        }
-        
+             
         Parlay storage p = parlays[_queryID];
         p.creator = msg.sender;
         p.amount = _amount;
         p.indexes = indexes;
         p.selections = selections;
-        p.rules = rules;
+        p.rules = _rules;
         p.timestamp = block.timestamp;
     
         addressBets[p.creator].push(_queryID);
@@ -395,12 +389,20 @@ contract SportsBook is ChainlinkClient  {
         _queryID = sendChainlinkRequestTo(oracle, req, ORACLE_PAYMENT);
     }
     
-    function buildParlay(string memory _indexes, string memory _selections, string memory _rules) internal returns (bytes32 _queryID){
+    function buildParlay(string memory _indexes, string memory _selections, int[] memory _rules) internal returns (bytes32 _queryID){
+        string memory s;
+        for(uint i = 0; i < _rules.length; i++){
+            uint x = uint(_rules[i]);
+            if(i!=0){
+                s = s.toSlice().concat(','.toSlice());
+            }
+            s = s.toSlice().concat(int2str(_rules[i]).toSlice());
+        }
         Chainlink.Request memory req = buildChainlinkRequest(stringToBytes32('2a0c4bdfe815406eba8ecdee3cbcc2ee'), address(this), this.fulfillParlayOdds.selector);
         req.add('type', 'parlay');
         req.add('index', _indexes);
         req.add('selection', _selections);
-        req.add('rule', _rules);
+        req.add('rule', s);
         _queryID = sendChainlinkRequestTo(oracle, req, ORACLE_PAYMENT);
     } 
     
@@ -542,6 +544,29 @@ contract SportsBook is ChainlinkClient  {
                 odds = odds*stringToUint(o[i].toString())/100;
             }
         }
+    }
+
+    function int2str(int i) internal pure returns (string memory){
+        if (i == 0) return "0";
+        bool negative = i < 0;
+        uint j = uint(negative ? -i : i);
+        uint l = j;     // Keep an unsigned copy
+        uint len;
+        while (j != 0){
+            len++;
+            j /= 10;
+        }
+        if (negative) ++len;  // Make room for '-' sign
+        bytes memory bstr = new bytes(len);
+        uint k = len - 1;
+        while (l != 0){
+            bstr[k--] = byte(uint8(48 + l % 10));
+            l /= 10;
+        }
+        if (negative) {    // Prepend '-'
+            bstr[0] = '-';
+        }
+        return string(bstr);
     }
 
      function stringToUint(string memory s) internal view returns (uint result) {
