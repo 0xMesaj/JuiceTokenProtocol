@@ -153,7 +153,7 @@ contract SportsBook is ChainlinkClient  {
         strings.slice[] memory os = new strings.slice[](o.count(delim) + 1);
         
         bool win = true;
-        for(uint i = 0; i < os.length-1; i++){
+        for(uint i = 0; i < os.length; i++){
             uint ans = computeResult(bytesToUInt(stringToBytes32(p.indexes[i])),bytesToUInt(stringToBytes32(p.selections[i])), p.rules[i]);
 
             if(ans == 0){

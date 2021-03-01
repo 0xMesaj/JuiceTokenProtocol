@@ -197,8 +197,12 @@ contract SBGE {
         require (amount > 0, "Nothing to claim");
         daiContribution[msg.sender] = 0;
         if (refundsAllowedUntil > block.timestamp) {
-            (bool success,) = msg.sender.call{ value: amount }("");
-            require (success, "Transfer failed");
+            // (bool success,) = msg.sender.call{ value: amount }("");
+            // require (success, "Transfer failed");
+
+            //TRANSFER DAI BACK
+
+
         }
         else {
             _claim(msg.sender, amount);
