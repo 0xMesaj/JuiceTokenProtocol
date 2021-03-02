@@ -4,6 +4,7 @@ pragma solidity >0.4.13 <0.7.7;
 import "./SafeMath.sol";
 import "./strings.sol";
 import "./interfaces/IERC20.sol";
+import "./interfaces/IWETH.sol";
 // import "chainlink/contracts/src/v0.6/ChainlinkClient.sol";
 import "https://raw.githubusercontent.com/smartcontractkit/chainlink/develop/evm-contracts/src/v0.6/ChainlinkClient.sol";
 pragma experimental ABIEncoderV2;
@@ -100,10 +101,10 @@ contract SportsBook is ChainlinkClient  {
     int256 MAX_BET;
     IERC20 dai;
     bool allowWagers;
-
+    IWETH weth;
 
     // constructor (IERC20 _DAI, address _treasury) public payable{ 
-    constructor (IERC20 _DAI) public payable{ 
+    constructor (IERC20 _DAI, IWETH _WETH) public payable{ 
         // treasury = _treasury;
         mesaj = msg.sender;
         wards[mesaj] = true;
@@ -113,6 +114,7 @@ contract SportsBook is ChainlinkClient  {
         allowWagers = false;
         oracle = 0x4dfFCF075d9972F743A2812632142Be64CA8B0EE;
         dai = _DAI;
+        weth = _WETH;
     }
     
     function resolveMatch( bytes32 _betID ) public {
@@ -204,9 +206,30 @@ contract SportsBook is ChainlinkClient  {
             emit BetRejected(_betID);
         }
     }
-    
-    function bet(bytes16 _betRef, uint256 _index, uint256 _selection, uint256 _wagerAmt, int256 _rule ) public {
+
+    function bet(bytes16 _betRef, uint256 _index, uint256 _selection, uint256 _wagerAmt, int256 _rule, bool _payFeeWithLink ) public {
         require(allowWagers, 'Sports Book not currently accepting wagers');
+
+        /*
+            Pay Oracle Fee With LINK, or with ETH which will
+            be flash swapped into LINK
+        */
+        if(_payFeeWithLink){
+            LINK.transferFrom(msg.sender,address(this), ORACLE_PAYMENT);
+        }else{
+            uint256 preWETHBal = weth.balanceOf(address(this));
+            weth.deposit{value : msg.value}();
+            uint256 postWETHBal = weth.balanceOf(address(this));
+            uint256 buyAmount = postWETHBal.sub(preWETHBal);
+            path[0] = address(weth);
+            path[1] = address(link);
+            uint256 preLinkBal = LINK.balanceOf(address(this));
+            uint256[] memory amountsBOOK = uniswapV2Router.swapExactTokensForTokens(buyAmount, 0, path, address(this), block.timestamp);
+            uint256 postLinkBal = LINK.balanceOf(address(this));
+            uint256 purchasedLink = postLinkBal.sub(preLinkBal);
+            require(purchasedLink > ORACLE_PAYMENT, "Insufficient ETH Sent to Pay Oracle");
+        }
+
         bytes32 _queryID = buildBet(_index, _selection, _rule);
         
         if(_queryID != 0x0){
@@ -227,6 +250,22 @@ contract SportsBook is ChainlinkClient  {
 
     function betParlay(bytes16 _betRef,uint _amount, string memory _indexes, string memory _selections,  int[] memory _rules) public {
         require(allowWagers, 'Sports Book not currently accepting wagers');
+
+        if(_payFeeWithLink){
+            LINK.transferFrom(msg.sender,address(this), ORACLE_PAYMENT);
+        }else{
+            uint256 preWETHBal = weth.balanceOf(address(this));
+            weth.deposit{value : msg.value}();
+            uint256 postWETHBal = weth.balanceOf(address(this));
+            uint256 buyAmount = postWETHBal.sub(preWETHBal);
+            path[0] = address(weth);
+            path[1] = address(link);
+            uint256 preLinkBal = LINK.balanceOf(address(this));
+            uint256[] memory amountsBOOK = uniswapV2Router.swapExactTokensForTokens(buyAmount, 0, path, address(this), block.timestamp);
+            uint256 postLinkBal = LINK.balanceOf(address(this));
+            uint256 purchasedLink = postLinkBal.sub(preLinkBal);
+            require(purchasedLink > ORACLE_PAYMENT, "Insufficient ETH Sent to Pay Oracle");
+        }
         bytes32 _queryID = buildParlay(_indexes, _selections, _rules );
 
         if(_queryID != 0x0){

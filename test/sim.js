@@ -1,7 +1,7 @@
 const { expect } = require('chai');
 const { ethers } = require('hardhat');
 const { utils, BigNumber, constants } = require("ethers");
-const { createWETH, createUniswap } = require("../test/helpers.js");
+const { createWETH, createUniswap } = require("./helpers.js");
 
 describe('Book Protocol Sim', () => {
     let owner, mesaj, aOne, aTwo, aThree, aFour, aFive;
@@ -40,8 +40,8 @@ describe('Book Protocol Sim', () => {
         const DAItoken = await uniswap.dai;     
         const BookLiqCalculator = await BookLiqCalculatorFactory.deploy(BOOKtoken.address, uniswap.factory.address);
         await BOOKtoken.setTransferPortal(portal.address);
-        // const SportsBook = await SportsBookFactory.deploy(DAItoken.address); 
-        const BookTreasury = await BookTreasuryFactory.deploy(BOOKtoken.address, BookLiqCalculator.address, uniswap.factory.address, uniswap.router.address)
+        const SportsBook = await SportsBookFactory.deploy(DAItoken.address); 
+        const BookTreasury = await BookTreasuryFactory.deploy(SportsBook.address, DAItoken.address, BOOKtoken.address, BookLiqCalculator.address, uniswap.factory.address, uniswap.router.address)
         const wDAI = await wDAIContract.deploy(DAItoken.address, BookTreasury.address, "wDAI", "wDAI");
         const BookSwap = await BookSwapFactory.deploy(BOOKtoken.address,wDAI.address,uniswap.router.address)
 
@@ -171,7 +171,7 @@ describe('Book Protocol Sim', () => {
         //Send accessible DAI liquidity to Treasury
         await wDAI.connect(owner).fund(BookTreasury.address)
         const final = await DAItoken.balanceOf(BookTreasury.address)
-        console.log("Final Treasury DAI Token Balance="+final/10e18)
+        console.log("Final Treasury DAI Token Balance="+final/1000000000000000000)
 
         await uniswap.router.connect(aTwo).swapExactTokensForTokensSupportingFeeOnTransferTokens(utils.parseEther("10000"), 0, [wDAI.address, BOOKtoken.address], aTwo.address, 2e9);
         await BOOKtoken.connect(aTwo).transfer(aFive.address, await BOOKtoken.balanceOf(aTwo.address))
@@ -190,6 +190,27 @@ describe('Book Protocol Sim', () => {
         await BookSwap.connect(owner).buyBookwithDAI(utils.parseEther("10000"))
         await BookSwap.connect(owner).sellBookforDAI(utils.parseEther("10000"))
 
+        // await BookTreasury.connect(owner).getMinRequiredVotes();
+        console.log("**********************")
+        const var1 = await wDAI.balanceOf(BOOKwdai.address)
+        const var2 = await BOOKtoken.balanceOf(BOOKwdai.address)
+        // console.log(var1)
+        // console.log(var2)
+        console.log(var1/var2)
+        console.log("**********************")
+
+        const treasuryDAI = DAItoken.balanceOf(BookTreasury.address)
+        await BookTreasury.connect(owner).numberGoUp(treasuryDAI)
+
+        console.log("**********************")
+        const var3 = await wDAI.balanceOf(BOOKwdai.address)
+        const var4 = await BOOKtoken.balanceOf(BOOKwdai.address)
+        // console.log(var3)
+        // console.log(var4)
+        console.log(var3/var4)
+        console.log("**********************")
+        const final2 = await DAItoken.balanceOf(BookTreasury.address)
+        console.log("Final Treasury DAI Token Balance="+final2/10e18)
     }); 
 
   

@@ -51,14 +51,13 @@ contract BookToken is ERC20{
     }
 
     function burn(uint256 _value) public returns (bool) {
-        console.log("in burn supply=%s",totalSupply);
         // Requires that the message sender has enough tokens to burn
         require(_value <= _balanceOf[msg.sender]);
 
         // Subtracts _value from callers balance and total supply
         _balanceOf[msg.sender] = _balanceOf[msg.sender].sub(_value);
         totalSupply = totalSupply.sub(_value);
-        console.log("in post burn supply=%s",totalSupply);
+
         // Since you cant actually burn tokens on the blockchain, sending to address 0, which none has the private keys to, removes them from the circulating supply
         return true;
     }

@@ -78,18 +78,21 @@ contract BookTreasury {
         treasurers[appointee] = true;
     }
 
-    function removeTreasurer(address shame) public isTreasurer(){
+    function abdicate(address shame) public isTreasurer(){
         require(mesaj != shame, "Et tu, Brute?");
         treasurers[shame] = false;
     }
     
-    constructor( IBookToken _BOOK, ILockedLiqCalculator _BookLiqCalculator, IUniswapV2Factory _factory, IUniswapV2Router02 _router) {
+    constructor( address _sportsBook, IERC20 _DAI,  IBookToken _BOOK, ILockedLiqCalculator _BookLiqCalculator, IUniswapV2Factory _factory, IUniswapV2Router02 _router) {
         factory = _factory;
         router = _router;
         BookLiqCalculator = _BookLiqCalculator;
         BOOK = _BOOK;
-        
+        DAI = _DAI;
+
         mesaj = msg.sender;
+        strategies[_sportsBook] = true;
+        DAI.approve(_sportsBook,uint(-1));
 
         treasurers[mesaj] = true;
         
@@ -97,18 +100,33 @@ contract BookTreasury {
 
     function setWDAI( IWDAI _wdai ) external isTreasurer(){
         WDAI = _wdai;
-        DAI = WDAI.wrappedToken();
+        
         WDAI.approve(address(router),uint(-1));
     }
 
     function numberGoUp(uint _amt) external isTreasurer(){
+          console.log("-----");
+        console.log(_amt);
+          console.log("-----");
+        DAI.approve(address(WDAI),_amt);
         WDAI.deposit(_amt);
 
         address[] memory path = new address[](2);
         path[0] = address(WDAI);
         path[1] = address(BOOK);
+
         router.swapExactTokensForTokensSupportingFeeOnTransferTokens(WDAI.balanceOf(address(this)), 0, path, address(this), 2000000000000000000000);
+        
         BOOK.burn(BOOK.balanceOf(address(this)));
+        uint256 wDAIamt = BookLiqCalculator.simulateWDAISell(DAI, address(WDAI));
+        WDAI.fund(address(this));
+        uint256 DAIbacking = DAI.balanceOf(address(WDAI));
+        console.log("-----");
+        console.log(wDAIamt);
+        console.log(DAIbacking);
+        console.log("-----");
+        require(DAIbacking > wDAIamt, "Number cannot go that high...yet");
+        
     }
 
     function proposeStrategy(address _strategy) public isTreasurer(){
@@ -163,9 +181,10 @@ contract BookTreasury {
     }
 
     // Min Required Votes to Reject is 51% of the Circulating Book Token
+    // Subtract the BOOK within the BOOK-wDAI LP
     function getMinRequiredVotes() internal view returns(uint256 amt){
         uint bookSupply = BOOK.totalSupply();
-        amt = bookSupply.sub(DAI.balanceOf(factory.getPair(address(BOOK),address(WDAI)))).mul(51).div(100);
+        amt = bookSupply.sub(BOOK.balanceOf(factory.getPair(address(BOOK),address(WDAI)))).mul(51).div(100);
     }
 
     function judgeProposal(uint proposalID) public {

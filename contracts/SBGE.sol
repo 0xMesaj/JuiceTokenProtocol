@@ -196,6 +196,11 @@ contract SBGE {
         uint256 amount = daiContribution[msg.sender];
         require (amount > 0, "Nothing to claim");
         daiContribution[msg.sender] = 0;
+
+        /*
+            If refund  is active refund DAI contribution -
+            else claim their LP and BOOK token
+        */
         if (refundsAllowedUntil > block.timestamp) {
             dai.transfer(msg.sender, amount);
         }

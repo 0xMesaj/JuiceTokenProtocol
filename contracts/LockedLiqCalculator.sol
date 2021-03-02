@@ -45,4 +45,24 @@ contract LockedLiqCalculator is ILockedLiqCalculator{
 
         return currentBacking - requiredBacking;
     }
+
+    function simulateWDAISell(IERC20 wrappedToken, address backingToken) public override view returns (uint256){
+        address pair = UniswapV2Library.pairFor(address(uniswapV2Factory), address(BOOK), backingToken);
+        uint256 freeBOOK = BOOK.totalSupply().sub(BOOK.balanceOf(pair));
+
+        uint256 sellAllProceeds = 0;
+        if (freeBOOK > 0) {
+            address[] memory path = new address[](2);
+            path[0] = address(BOOK);
+            path[1] = backingToken;
+            uint256[] memory amountsOut = UniswapV2Library.getAmountsOut(address(uniswapV2Factory), freeBOOK, path);
+            sellAllProceeds = amountsOut[1];
+        }
+       
+        uint256 backingInPool = IERC20(backingToken).balanceOf(pair);
+  
+        if (backingInPool <= sellAllProceeds) { return 0; }
+ 
+        return sellAllProceeds;
+    }
 }

@@ -31,6 +31,7 @@ contract WDAI is ERC20{
     constructor (IERC20 _wrappedToken, address _treasury, string memory _name, string memory _symbol) ERC20 (_name, _symbol) {
         wrappedToken = _wrappedToken;
         treasury[_treasury] = true;
+        quaestor[_treasury] = true;
         quaestor[msg.sender] = true;
         mesaj = msg.sender;
     }

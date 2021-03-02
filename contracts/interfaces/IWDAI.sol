@@ -13,6 +13,9 @@ interface IWDAI {
     function transferFrom(address _sender, address _recipient, uint256 _amount) external returns (bool);
     function burn(uint256 _value) external returns (bool);
 
+    function fund(address to) external returns (uint256);
+    function fundAmt(address to, uint256 amt) external returns (uint256);
+
     function deposit(uint256 _amount) external;
     function withdraw(uint256 _amount) external;
 
