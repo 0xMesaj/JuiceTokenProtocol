@@ -248,7 +248,7 @@ contract SportsBook is ChainlinkClient  {
         emit BetRequested(_queryID, _betRef);
     }
 
-    function betParlay(bytes16 _betRef,uint _amount, string memory _indexes, string memory _selections,  int[] memory _rules) public {
+    function betParlay(bytes16 _betRef,uint _amount, string memory _indexes, string memory _selections,  int[] memory _rules, bool _payFeeWithLink ) public {
         require(allowWagers, 'Sports Book not currently accepting wagers');
 
         if(_payFeeWithLink){
