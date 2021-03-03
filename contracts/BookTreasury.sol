@@ -16,11 +16,9 @@ contract BookTreasury {
     using SafeERC20 for IERC20;
     using SafeMath for uint;
 
-    /// @notice The name of this contract
-    string public constant name = "Book Governor";
-    
-    bytes32 public constant DOMAIN_TYPEHASH = keccak256("EIP712Domain(string name,uint256 chainId,address verifyingContract)");
 
+    string public constant name = "Book Treasury";
+    bytes32 public constant DOMAIN_TYPEHASH = keccak256("EIP712Domain(string name,uint256 chainId,address verifyingContract)");
     bytes32 public constant BALLOT_TYPEHASH = keccak256("Ballot(uint256 proposalId,bool support)");
 
     uint proposalCount;
@@ -105,9 +103,6 @@ contract BookTreasury {
     }
 
     function numberGoUp(uint _amt) external isTreasurer(){
-          console.log("-----");
-        console.log(_amt);
-          console.log("-----");
         DAI.approve(address(WDAI),_amt);
         WDAI.deposit(_amt);
 
@@ -121,12 +116,7 @@ contract BookTreasury {
         uint256 wDAIamt = BookLiqCalculator.simulateWDAISell(DAI, address(WDAI));
         WDAI.fund(address(this));
         uint256 DAIbacking = DAI.balanceOf(address(WDAI));
-        console.log("-----");
-        console.log(wDAIamt);
-        console.log(DAIbacking);
-        console.log("-----");
         require(DAIbacking > wDAIamt, "Number cannot go that high...yet");
-        
     }
 
     function proposeStrategy(address _strategy) public isTreasurer(){

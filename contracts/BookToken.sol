@@ -50,16 +50,8 @@ contract BookToken is ERC20{
         emit Transfer(sender, recipient, amount);
     }
 
-    function burn(uint256 _value) public returns (bool) {
-        // Requires that the message sender has enough tokens to burn
-        require(_value <= _balanceOf[msg.sender]);
-
-        // Subtracts _value from callers balance and total supply
-        _balanceOf[msg.sender] = _balanceOf[msg.sender].sub(_value);
-        totalSupply = totalSupply.sub(_value);
-
-        // Since you cant actually burn tokens on the blockchain, sending to address 0, which none has the private keys to, removes them from the circulating supply
-        return true;
+    function burn(uint256 amount) public virtual {
+        _burn(msg.sender, amount);
     }
 
     /**
