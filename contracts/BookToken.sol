@@ -2,31 +2,170 @@ pragma solidity ^0.7.0;
 pragma experimental ABIEncoderV2;
 
 import "./SafeMath.sol";
-import "./interfaces/ITransferPortal.sol";
 import "./ERC20.sol";
+import "./interfaces/ITransferPortal.sol";
+import "./interfaces/IERC20.sol";
+import "./uniswap/IUniswapV2Factory.sol";
+
 import 'hardhat/console.sol';
 
 contract BookToken is ERC20{
     using SafeMath for uint256;
 
+    string public constant contract_name = "Book Governor";
+    bytes32 public constant DOMAIN_TYPEHASH = keccak256("EIP712Domain(string name,uint256 chainId,address verifyingContract)");
+    bytes32 public constant BALLOT_TYPEHASH = keccak256("Ballot(uint256 proposalId,bool support)");
+
     event Deposit(address indexed from, uint256 amount);
     event Withdrawal(address indexed to, uint256 amount);
 
-    address public owner;
+    address public mesaj;
+    IERC20 DAI;
+    IERC20 WDAI;
+    IUniswapV2Factory factory;
     ITransferPortal public transferPortal;
+    uint proposalCount;
 
     modifier ownerOnly(){
-        require (msg.sender == owner, "Owner only");
+        require (msg.sender == mesaj, "Owner only");
         _;
     }
 
-    constructor(string memory _name, string memory _symbol) ERC20(_name,_symbol) {
-        owner = msg.sender;
-        _mint(owner, 28000000000000000000000000); //28 Milli
+    constructor(string memory _name, string memory _symbol, IERC20 _DAI, IUniswapV2Factory _factory) ERC20(_name,_symbol) {
+        mesaj = msg.sender;
+
+        factory = _factory;
+        DAI = _DAI;
+        _mint(mesaj, 28000000000000000000000000); //28 Milli
     }
+
+    struct Proposal {
+        uint id;
+        address upgrade;
+        uint startBlock;
+        uint endBlock;
+        uint forVotes;
+        uint againstVotes;
+        bool canceled;
+        bool executed;
+        mapping (address => Receipt) receipts;
+    }
+
+    struct Receipt {
+        bool hasVoted;
+        bool support;
+        uint256 votes;
+    }
+
+    enum ProposalState {
+        Pending,
+        Active,
+        Canceled,
+        Defeated,
+        Succeeded,
+        Queued,
+        Executed
+    }
+
+    mapping(address => bool) public treasurers;
+    mapping (uint => Proposal) public proposals;
+
+    event ProposalCreated(uint id, uint startBlock, uint endBlock, address strategy);
+    event VoteCast(address voter, uint proposalId, bool support, uint votes);
+
+    modifier isTreasurer(){
+        require (treasurers[msg.sender], "Treasurers only");
+        _;
+    }
+
+    function setTreasurer(address appointee) public isTreasurer(){
+        require(!treasurers[appointee], "Appointee is already treasurer.");
+        treasurers[appointee] = true;
+    }
+
+    function abdicate(address shame) public isTreasurer(){
+        require(mesaj != shame, "Et tu, Brute?");
+        treasurers[shame] = false;
+    }
+
+    function proposeUpgrade(address _upgrade) public isTreasurer(){
+        uint _startBlock = block.number;
+        uint _endBlock = _startBlock.add(5760);
+
+        proposalCount++;
+
+        Proposal storage p = proposals[proposalCount];
+        p.id = proposalCount;
+        p.upgrade = _upgrade;
+        p.startBlock = _startBlock;
+        p.endBlock = _endBlock;
+        p.forVotes = 0;
+        p.againstVotes = 0;
+        p.canceled = false;
+        p.executed = false;
+        emit ProposalCreated(p.id, _startBlock, _endBlock, _upgrade);
+    }
+
+    function castVote(uint proposalId, bool support) public {
+        return _castVote(msg.sender, proposalId, support);
+    }
+
+    function castVoteBySig(uint proposalId, bool support, uint8 v, bytes32 r, bytes32 s) public {
+        bytes32 domainSeparator = keccak256(abi.encode(DOMAIN_TYPEHASH, keccak256(bytes(name)), getChainId(), address(this)));
+        bytes32 structHash = keccak256(abi.encode(BALLOT_TYPEHASH, proposalId, support));
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
+        address signatory = ecrecover(digest, v, r, s);
+        require(signatory != address(0), "castVoteBySig: invalid signature");
+        return _castVote(signatory, proposalId, support);
+    }
+
+    function _castVote(address voter, uint proposalId, bool support) internal {
+        require(state(proposalId) == ProposalState.Active, "GovernorAlpha::_castVote: voting is closed");
+        Proposal storage proposal = proposals[proposalId];
+        Receipt storage receipt = proposal.receipts[voter];
+        require(receipt.hasVoted == false, "_castVote: voter already voted");
+        uint256 votes = balanceOf(voter);
+
+        if (support) {
+            proposal.forVotes = votes.add(proposal.forVotes);
+        } else {
+            proposal.againstVotes = votes.add(proposal.againstVotes);
+        }
+
+        receipt.hasVoted = true;
+        receipt.support = support;
+        receipt.votes = votes;
+
+        emit VoteCast(voter, proposalId, support, votes);
+    }
+
+     // Min Required Votes to Reject is 51% of the Circulating Book Token
+    // Subtract the BOOK within the BOOK-wDAI LP
+    function getMinRequiredVotes() internal view returns(uint256 amt){
+        uint bookSupply = totalSupply;
+        amt = bookSupply.sub(balanceOf(factory.getPair(address(this),address(WDAI)))).mul(51).div(100);
+    }
+
+    function judgeProposal(uint proposalID) public {
+        Proposal storage p = proposals[proposalID];
+        uint MIN_VOTES = getMinRequiredVotes();
+        require(block.timestamp > p.endBlock, 'Proposal Ongoing');
+        if((p.forVotes > p.againstVotes) || p.againstVotes < MIN_VOTES){
+            transferPortal = ITransferPortal(p.upgrade);
+        }else{
+            delete proposals[proposalID];
+        }
+    }
+
 
     function setTransferPortal(ITransferPortal _transferPortal) external ownerOnly(){
         transferPortal = _transferPortal;
+    }
+
+    
+    function burn(uint256 amount) public virtual returns(bool) {
+        _burn(msg.sender, amount);
+        return true;
     }
 
     function _transfer(address sender, address recipient, uint256 amount) internal override virtual {
@@ -50,23 +189,33 @@ contract BookToken is ERC20{
         emit Transfer(sender, recipient, amount);
     }
 
-    function burn(uint256 amount) public virtual {
-        _burn(msg.sender, amount);
+    function state(uint proposalId) public view returns (ProposalState) {
+        require(proposalCount >= proposalId && proposalId > 0, "state: invalid proposal id");
+        Proposal storage proposal = proposals[proposalId];
+        if (proposal.canceled) {
+            return ProposalState.Canceled;
+        } else if (block.number <= proposal.startBlock) {
+            return ProposalState.Pending;
+        } else if (block.number <= proposal.endBlock) {
+            return ProposalState.Active;
+        } else if (proposal.forVotes <= proposal.againstVotes) {
+            return ProposalState.Defeated;
+        } else if (proposal.forVotes <= proposal.againstVotes) {
+            return ProposalState.Succeeded;
+        } 
     }
 
-    /**
-     * @dev Hook that is called before any transfer of tokens. This includes
-     * minting and burning.
-     *
-     * Calling conditions:
-     *
-     * - when `from` and `to` are both non-zero, `amount` of ``from``'s tokens
-     * will be to transferred to `to`.
-     * - when `from` is zero, `amount` tokens will be minted for `to`.
-     * - when `to` is zero, `amount` of ``from``'s tokens will be burned.
-     * - `from` and `to` are never both zero.
-     *
-     * To learn more about hooks, head to xref:ROOT:extending-contracts.adoc#using-hooks[Using Hooks].
-     */
-    function _beforeTokenTransfer(address from, address to, uint256 amount) internal override virtual { }
+    function getChainId() internal pure returns (uint) {
+        uint chainId;
+        assembly { chainId := chainid() }
+        return chainId;
+    }
+
+    function setWDAI( IERC20 _WDAI) external isTreasurer(){
+        require( WDAI == 0x0, "Wrapped DAI already set");
+        WDAI = _WDAI;
+    }
+
+    receive() external payable { }
+
 }

@@ -1,6 +1,7 @@
 pragma solidity ^0.7.0;
 
 import 'hardhat/console.sol';
+
 import './BookToken.sol';
 import './SafeMath.sol';
 import './TransferPortal.sol';
@@ -15,6 +16,19 @@ import './uniswap/IUniswapV2Factory.sol';
 import './uniswap/libraries/TransferHelper.sol';
 import "./uniswap/IUniswapV2Router02.sol";
 import './uniswap/libraries/UniswapV2Library.sol';
+
+/*
+    Sports Book Generation Contract - Once activated this contract will gather liquidity from
+    contributors over a period of a week. Once completed this contract will initialize the
+    BOOK-wDAI and wDAI-DAI UNI LPs. This contract will then use a portion of the liquidity
+    generated to do a market buy of BOOK Token for the contributors, which will be at the 
+    floor price of BOOK. This is to prevent greedy bots and instead give the value to SBGE
+    contributors.
+
+    This contract accepts many different forms of contributions: DAI, ETH, Uniswap or Sushiswap LP
+    Tokens, or any token that this contract can flash swap for DAI on Uniswap. All contributions will
+    be denominated in DAI. LP tokens are unwrapped and the underlying tokens are sold for DAI.
+*/
 
 contract SBGE {
     using SafeMath for uint256;
