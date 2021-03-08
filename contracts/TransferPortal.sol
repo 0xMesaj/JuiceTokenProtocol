@@ -114,6 +114,7 @@ contract TransferPortal is ITransferPortal{
 
     function safeAddLiquidity(IERC20 token, uint256 tokenAmount, uint256 bookAmount, uint256 minTokenAmount, uint256 minBookAmount, address to, uint256 deadline) public
     returns (uint256 bookUsed, uint256 tokenUsed, uint256 liquidity){
+
         address pool = uniswapV2Factory.getPair(address(BOOK), address(token));
         require (pool != address(0) && addressStates[pool] == AddressState.AllowedPool, "Pool not approved");
         unrestricted = true;
@@ -142,7 +143,7 @@ contract TransferPortal is ITransferPortal{
 
     function handleTransfer(address, address from, address to, uint256 amount) external override
         returns (TransferPortalTarget[] memory targets){
-
+            
         address mustUpdateAddress = mustUpdate;
         if (mustUpdateAddress != address(0)) {
             mustUpdate = address(0);

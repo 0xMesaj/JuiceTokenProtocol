@@ -7,10 +7,17 @@ import "./interfaces/IERC20.sol";
 import "./interfaces/IWDAI.sol";
 import "./interfaces/ILockedLiqCalculator.sol";
 import "./interfaces/IBookToken.sol";
+import "./interfaces/IBookVault.sol";
 import "./uniswap/IUniswapV2Router02.sol";
 import "./uniswap/IUniswapV2Factory.sol";
 
 import 'hardhat/console.sol';
+
+/*
+    Book Treasury holds DAI liquidity for the BOOK token protocol - to be utilized in approved
+    strategies to generate profit. These strategies are approved through on-chain voting
+    with the BOOK token
+*/
 
 contract BookTreasury {
     using SafeERC20 for IERC20;
@@ -22,6 +29,7 @@ contract BookTreasury {
     bytes32 public constant BALLOT_TYPEHASH = keccak256("Ballot(uint256 proposalId,bool support)");
 
     uint proposalCount;
+    uint256 MIN_REQUIREMENT = uint(-1);
     address mesaj;
     IBookToken BOOK;
     IERC20 DAI;
@@ -29,6 +37,7 @@ contract BookTreasury {
     IUniswapV2Factory factory;
     IUniswapV2Router02 router;
     ILockedLiqCalculator BookLiqCalculator;
+    IBookVault vault;
     
     struct Proposal {
         uint id;
@@ -63,7 +72,7 @@ contract BookTreasury {
     mapping(address => bool) public treasurers;
     mapping (uint => Proposal) public proposals;
 
-    event ProposalCreated(uint id, uint startBlock, uint endBlock, address strategy);
+    event ProposalCreated(uint id, uint startBlock, uint endBlock, address upgrade);
     event VoteCast(address voter, uint proposalId, bool support, uint votes);
     
     modifier isTreasurer(){
@@ -81,28 +90,43 @@ contract BookTreasury {
         treasurers[shame] = false;
     }
     
-    constructor( address _sportsBook, IERC20 _DAI,  IBookToken _BOOK, ILockedLiqCalculator _BookLiqCalculator, IUniswapV2Factory _factory, IUniswapV2Router02 _router) {
+    constructor( IBookVault _vault, address _sportsBook, IERC20 _DAI,  IBookToken _BOOK, ILockedLiqCalculator _BookLiqCalculator, IUniswapV2Factory _factory, IUniswapV2Router02 _router) {
         factory = _factory;
         router = _router;
         BookLiqCalculator = _BookLiqCalculator;
         BOOK = _BOOK;
         DAI = _DAI;
 
+        vault = _vault;
         mesaj = msg.sender;
         strategies[_sportsBook] = true;
         DAI.approve(_sportsBook,uint(-1));
-
         treasurers[mesaj] = true;
         
     }
 
     function setWDAI( IWDAI _wdai ) external isTreasurer(){
         WDAI = _wdai;
-        
         WDAI.approve(address(router),uint(-1));
     }
 
+    function initializeTreasury( uint256 _amount ) public{
+        require(msg.sender == address(WDAI), "Invalid Access");
+        //Must maintain 100% reserve of initial DAI funded
+        MIN_REQUIREMENT = _amount;    
+    }
+
+    function setAllowance( uint256 _amount, address _strategy) external isTreasurer(){
+        require(strategies[_strategy], "Requested address not valid strategy");
+        uint DAIreserve = DAI.balanceOf(address(this));
+        require(_amount < DAIreserve);
+        DAI.approve(_strategy,_amount);
+    }
+
     function numberGoUp(uint _amt) external isTreasurer(){
+        uint256 check = DAI.balanceOf(address(this)).sub(_amt);
+        require(check > MIN_REQUIREMENT, "Treasury below buying threshold");
+        
         DAI.approve(address(WDAI),_amt);
         WDAI.deposit(_amt);
 
@@ -110,10 +134,10 @@ contract BookTreasury {
         path[0] = address(WDAI);
         path[1] = address(BOOK);
 
-        router.swapExactTokensForTokensSupportingFeeOnTransferTokens(WDAI.balanceOf(address(this)), 0, path, address(this), 2000000000000000000000);
+        router.swapExactTokensForTokensSupportingFeeOnTransferTokens(WDAI.balanceOf(address(this)), 0, path, address(this), 2e9);
         
         BOOK.burn(BOOK.balanceOf(address(this)));
-        uint256 wDAIamt = BookLiqCalculator.simulateWDAISell(DAI, address(WDAI));
+        uint256 wDAIamt = BookLiqCalculator.simulateSell(DAI, address(WDAI));
         WDAI.fund(address(this));
         uint256 DAIbacking = DAI.balanceOf(address(WDAI));
         require(DAIbacking > wDAIamt, "Number cannot go that high...yet");
@@ -171,10 +195,15 @@ contract BookTreasury {
     }
 
     // Min Required Votes to Reject is 51% of the Circulating Book Token
-    // Subtract the BOOK within the BOOK-wDAI LP
+    // Subtract the BOOK within the LPs
     function getMinRequiredVotes() internal view returns(uint256 amt){
+        uint256 poolNum = vault.poolInfoCount();
+        uint256 pooledBookCount = 0;
+        for(uint i=0;i<poolNum;i++){
+            pooledBookCount = pooledBookCount.add(vault.getPooledBook(i));
+        }
         uint bookSupply = BOOK.totalSupply();
-        amt = bookSupply.sub(BOOK.balanceOf(factory.getPair(address(BOOK),address(WDAI)))).mul(51).div(100);
+        amt = bookSupply.sub(pooledBookCount).mul(51).div(100);
     }
 
     function judgeProposal(uint proposalID) public {
@@ -184,8 +213,9 @@ contract BookTreasury {
         if((p.forVotes > p.againstVotes) || p.againstVotes < MIN_VOTES){
             strategies[p.strategy] = true;
             DAI.approve(p.strategy,uint(-1));
+            p.executed = true;
         }else{
-            delete proposals[proposalID];
+            p.canceled = true;
         }
     }
 

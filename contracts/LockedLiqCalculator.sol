@@ -46,7 +46,7 @@ contract LockedLiqCalculator is ILockedLiqCalculator{
         return currentBacking - requiredBacking;
     }
 
-    function simulateWDAISell(IERC20 wrappedToken, address backingToken) public override view returns (uint256){
+    function simulateSell(IERC20 wrappedToken, address backingToken) public override view returns (uint256){
         address pair = UniswapV2Library.pairFor(address(uniswapV2Factory), address(BOOK), backingToken);
         uint256 freeBOOK = BOOK.totalSupply().sub(BOOK.balanceOf(pair));
 

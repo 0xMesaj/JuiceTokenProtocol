@@ -4,6 +4,8 @@ import "./interfaces/IERC20.sol";
 import "./SafeMath.sol";
 import "./SafeERC20.sol";
 
+import 'hardhat/console.sol';
+
 contract BookVault{
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
@@ -35,10 +37,11 @@ contract BookVault{
     IERC20 public immutable rewardToken;
 
     PoolInfo[] public poolInfo;
-    mapping (uint256 => mapping (address => UserInfo)) public userInfo;
-    uint256 public totalAllocationPoints;
 
+    mapping (uint256 => mapping (address => UserInfo)) public userInfo;
     mapping (IERC20 => bool) existingPools;
+
+    uint256 public totalAllocationPoints;
     uint256 constant maxPoolCount = 20;
     uint256 totalReward;
     uint256 lastRewardBalance;
@@ -50,8 +53,7 @@ contract BookVault{
         rewardToken = _rewardToken;
     }
 
-    function poolInfoCount() external view returns (uint256) 
-    {
+    function poolInfoCount() external view returns (uint256) {
         return poolInfo.length;
     }
 
@@ -78,8 +80,10 @@ contract BookVault{
     }
 
     function pendingReward(uint256 _poolId, address _user) external view returns (uint256) {
+        console.log("Inside Pending Reward");
         PoolInfo storage pool = poolInfo[_poolId];
         UserInfo storage user = userInfo[_poolId][_user];
+        console.log("User amt staked:%s",user.amountStaked);
         uint256 accRewardPerShare = pool.accRewardPerShare;
         uint256 supply = pool.token.balanceOf(address(this));
         uint256 balance = rewardToken.balanceOf(address(this));
@@ -92,6 +96,10 @@ contract BookVault{
             accRewardPerShare = accRewardPerShare.add(reward.mul(1e12).div(supply));
         }
         return user.amountStaked.mul(accRewardPerShare).div(1e12).sub(user.rewardDebt);
+    }
+
+    function getPooledBook(uint256 _poolID) public view returns(uint256 pooledBook) {
+        pooledBook = rewardToken.balanceOf(address(poolInfo[_poolID].token));
     }
 
     function massUpdatePools() public {

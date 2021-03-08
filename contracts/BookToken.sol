@@ -5,9 +5,14 @@ import "./SafeMath.sol";
 import "./ERC20.sol";
 import "./interfaces/ITransferPortal.sol";
 import "./interfaces/IERC20.sol";
+import "./interfaces/IBookVault.sol";
 import "./uniswap/IUniswapV2Factory.sol";
 
 import 'hardhat/console.sol';
+/*
+    BOOK Token has a transfer portal that is upgradeable by on-chain governance
+    Total Initial Supply: 28 Million
+*/
 
 contract BookToken is ERC20{
     using SafeMath for uint256;
@@ -24,6 +29,7 @@ contract BookToken is ERC20{
     IERC20 WDAI;
     IUniswapV2Factory factory;
     ITransferPortal public transferPortal;
+    IBookVault vault;
     uint proposalCount;
 
     modifier ownerOnly(){
@@ -33,6 +39,7 @@ contract BookToken is ERC20{
 
     constructor(string memory _name, string memory _symbol, IERC20 _DAI, IUniswapV2Factory _factory) ERC20(_name,_symbol) {
         mesaj = msg.sender;
+        treasurers[mesaj] = true;
 
         factory = _factory;
         DAI = _DAI;
@@ -111,7 +118,7 @@ contract BookToken is ERC20{
     }
 
     function castVoteBySig(uint proposalId, bool support, uint8 v, bytes32 r, bytes32 s) public {
-        bytes32 domainSeparator = keccak256(abi.encode(DOMAIN_TYPEHASH, keccak256(bytes(name)), getChainId(), address(this)));
+        bytes32 domainSeparator = keccak256(abi.encode(DOMAIN_TYPEHASH, keccak256(bytes(contract_name)), getChainId(), address(this)));
         bytes32 structHash = keccak256(abi.encode(BALLOT_TYPEHASH, proposalId, support));
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
         address signatory = ecrecover(digest, v, r, s);
@@ -139,11 +146,16 @@ contract BookToken is ERC20{
         emit VoteCast(voter, proposalId, support, votes);
     }
 
-     // Min Required Votes to Reject is 51% of the Circulating Book Token
-    // Subtract the BOOK within the BOOK-wDAI LP
+    // Min Required Votes to Reject is 51% of the Circulating Book Token
+    // Subtract the BOOK within the LPs
     function getMinRequiredVotes() internal view returns(uint256 amt){
+        uint256 poolNum = vault.poolInfoCount();
+        uint256 pooledBookCount = 0;
+        for(uint i=0;i<poolNum;i++){
+            pooledBookCount = pooledBookCount.add(vault.getPooledBook(i));
+        }
         uint bookSupply = totalSupply;
-        amt = bookSupply.sub(balanceOf(factory.getPair(address(this),address(WDAI)))).mul(51).div(100);
+        amt = bookSupply.sub(pooledBookCount).mul(51).div(100);
     }
 
     function judgeProposal(uint proposalID) public {
@@ -152,8 +164,9 @@ contract BookToken is ERC20{
         require(block.timestamp > p.endBlock, 'Proposal Ongoing');
         if((p.forVotes > p.againstVotes) || p.againstVotes < MIN_VOTES){
             transferPortal = ITransferPortal(p.upgrade);
+            p.executed = true;
         }else{
-            delete proposals[proposalID];
+            p.canceled = true;
         }
     }
 
@@ -212,8 +225,13 @@ contract BookToken is ERC20{
     }
 
     function setWDAI( IERC20 _WDAI) external isTreasurer(){
-        require( WDAI == 0x0, "Wrapped DAI already set");
+        require( address(WDAI) == address(0x0), "Wrapped DAI already set");
         WDAI = _WDAI;
+    }
+
+    function setBookVault( IBookVault _vault ) external isTreasurer(){
+        require( address(vault) == address(0x0), "Vault already set");
+        vault = _vault;
     }
 
     receive() external payable { }

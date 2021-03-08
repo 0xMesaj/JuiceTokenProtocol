@@ -40,7 +40,7 @@ contract SBGE {
     uint256 public totalDAIContribution = 0;
 
     address[] public contributors;
-    bool public isActive; 
+    bool public isActive;
     uint256 refundsAllowedUntil;
     address public owner;
     address public DAI;
@@ -63,8 +63,6 @@ contract SBGE {
     uint256 public totalBOOKBought;
     uint256 public totalBOOKwdai;
     uint256 public totalDAIwdai;
-    uint256 recoveryDate = block.timestamp + 2592000; // 1 Month
-
 
     // Scaled By a Factor of 100, 10000 = 100%
     uint16 constant public poolPercent = 8000; // BOOK-wDAI Liquidity Pool
@@ -72,8 +70,6 @@ contract SBGE {
     uint16 constant public buyPercent = 400; // Used to execute initial purchase of BOOK token from LP for contributors
     uint16 constant public development = 500; // Developemt/Project Fund
     uint16 constant public devPayment = 500; // Payment
-
-    mapping (address => uint256) public tokenReserves;
 
     modifier ownerOnly(){
         require (msg.sender == owner, "Owner only");
@@ -113,14 +109,13 @@ contract SBGE {
 
     function activate() public ownerOnly(){
         require (!isActive && contributors.length == 0 && block.timestamp >= refundsAllowedUntil, "Already activated");
-        uint256 arf = BOOK.totalSupply();
         require (BOOK.balanceOf(address(this)) == BOOK.totalSupply(), "Missing supply");
 
         isActive = true;
     }
 
     function complete() public ownerOnly() active(){
-        require (block.timestamp >= refundsAllowedUntil, "Refund period is still active");
+        require (block.timestamp >= refundsAllowedUntil, "Refund period active");
         isActive = false;
         if (totalDAIContribution == 0) { return; }
         distribute();
@@ -131,6 +126,11 @@ contract SBGE {
         refundsAllowedUntil = uint256(-1);
     }
 
+    /*
+        External Functions for User Contribution
+    */
+
+    // DAI Contribution
     function contributeDAI( uint256 _amount ) external payable active(){
         require(_amount > 0, "Contribution amount must be greater than 0");
         uint256 oldContribution = daiContribution[msg.sender];
@@ -143,10 +143,11 @@ contract SBGE {
         emit Contribution(_amount, msg.sender);
     }
 
+    // ERC20 Token / LP Token Contribution
     function contributeToken(address _token, uint256 _amount) external payable active(){
         require(_amount > 0, "Contribution amount must be greater than 0");
         uint256 oldContribution = daiContribution[msg.sender];
-        uint256 newContribution = oldContribution + msg.value;
+
         if (oldContribution == 0 ) {
             contributors.push(msg.sender);
         }
@@ -159,8 +160,7 @@ contract SBGE {
         if(token0 != address(0)) {
             address token1 = IUniswapV2Pair(_token).token1();
 
-            console.log("factory=%s",address(uniswapV2Factory));
-            bool isUniLP = IUniswapV2Factory(uniswapV2Factory).getPair(token1,token0) !=  address(0);
+            bool isUniLP = IUniswapV2Factory(uniswapV2Factory).getPair(token0,token1) !=  address(0);
             // bool isSushiLP = IUniswapV2Factory(sushiswapFactory).getPair(token0,token1) !=  address(0);
             bool isSushiLP = false;
 
@@ -182,37 +182,52 @@ contract SBGE {
 
             uint256 balanceDAINew = IERC20(dai).balanceOf(address(this));
 
-            uint256 reserveDAI = tokenReserves[address(dai)];
-
-            require(balanceDAINew > reserveDAI, "No good");
             uint256 totalDAIAdded = amountOutToken0.add(amountOutToken1);
-            require(tokenReserves[address(dai)].add(totalDAIAdded) <= balanceDAINew, "DAI Received From Sale Insufficient");
-            tokenReserves[address(dai)] = balanceDAINew;
-           
+
+            totalDAIContribution = totalDAIContribution.add(totalDAIAdded);
             daiContribution[msg.sender] = daiContribution[msg.sender].add(totalDAIAdded);
 
             emit Contribution(totalDAIAdded, msg.sender);
             return;
         }//If token is not DAI then we sell it for DAI
         else if(_token != address(dai)){ 
+            uint256 balanceDAIOld = IERC20(dai).balanceOf(address(this));
             uint256 amountOut = sellTokenForDAI(_token, _amount, true);
             uint256 balanceDAINew = IERC20(dai).balanceOf(address(this));
-            uint256 reserveDAI = tokenReserves[address(dai)];
-            require(balanceDAINew > reserveDAI, "No good");
-            require(reserveDAI.add(amountOut) <= balanceDAINew, "DAI Received From Sale Insufficient");
-            tokenReserves[address(WETH)] = balanceDAINew;
-            totalDAIContribution += amountOut;
-            daiContribution[msg.sender] += amountOut;
+            require(balanceDAIOld < balanceDAINew, "DAI Received From Sale Insufficient");
+            totalDAIContribution = totalDAIContribution.add(amountOut);
+            daiContribution[msg.sender] = daiContribution[msg.sender].add(amountOut);
         }
+        require(daiContribution[msg.sender] > oldContribution, "No new contribution added.");
+    }
+
+    //ETH contribution
+    receive() external payable active(){
+        require(msg.value > 0, 'Value must me greater than 0');
+        uint256 oldContribution = daiContribution[msg.sender];
+        if ( oldContribution == 0 ) {
+            contributors.push(msg.sender);
+        }
+        uint256 oldBalance = WETH.balanceOf(address(this));
+        WETH.deposit{value : msg.value}();
+        uint256 newBalance = WETH.balanceOf(address(this));
+        require(newBalance > oldBalance, 'No wETH received from wrap');
+
+        uint256 wETHamt = newBalance.sub(oldBalance);
+        uint256 amountOut = sellTokenForDAI(address(WETH), wETHamt, false);
+
+        require(amountOut > 0, 'No DAI received from sale');
+        daiContribution[msg.sender] += amountOut;
     }
 
     function claim() public{
         uint256 amount = daiContribution[msg.sender];
         require (amount > 0, "Nothing to claim");
+        require(!isActive, "SBGE still active");
         daiContribution[msg.sender] = 0;
 
         /*
-            If refund  is active refund DAI contribution -
+            If refund is active refund DAI contribution -
             else claim their LP and BOOK token
         */
         if (refundsAllowedUntil > block.timestamp) {
@@ -222,8 +237,6 @@ contract SBGE {
             _claim(msg.sender, amount);
         }
     }
-
-   
 
     function sellTokenForDAI(address _token, uint256 _amount, bool _from) internal returns (uint256 daiAmount){
         address pairWithDAI = IUniswapV2Factory(uniswapV2Factory).getPair(_token, address(dai));
@@ -264,25 +277,8 @@ contract SBGE {
         amountOut = numerator / denominator;
     }
 
-    receive() external payable active(){
-        require(msg.value > 0, 'Value must me greater than 0');
-        uint256 oldContribution = daiContribution[msg.sender];
-        if ( oldContribution == 0 ) {
-            contributors.push(msg.sender);
-        }
-        uint256 oldBalance = WETH.balanceOf(address(this));
-        WETH.deposit{value : msg.value}();
-        uint256 newBalance = WETH.balanceOf(address(this));
-        require(newBalance > oldBalance, 'No wETH received from wrap');
 
-        uint256 wETHamt = newBalance.sub(oldBalance);
-        uint256 amountOut = sellTokenForDAI(address(WETH), wETHamt, false);
-
-        require(amountOut > 0, 'No DAI received from sale');
-        daiContribution[msg.sender] += amountOut;
-    }
-
-    function setupBOOKwdai() public{
+    function setupBOOKwdai() public ownerOnly() {
         BOOKwdai = IUniswapV2Pair(uniswapV2Factory.getPair(address(wdai), address(BOOK)));
         if (address(BOOKwdai) == address(0)) {
             BOOKwdai = IUniswapV2Pair(uniswapV2Factory.createPair(address(wdai), address(BOOK)));
@@ -304,7 +300,9 @@ contract SBGE {
     function distribute() internal {
         require (!distributionComplete, "Distribution complete");
         uint256 totalDAI = totalDAIContribution;
-        console.log('total: %s',totalDAI);
+
+        // console.log('total: %s',totalDAI);
+        
         require (totalDAI > 0, "Sad...");
         distributionComplete = true;
         totalDAICollected = totalDAI;
@@ -316,7 +314,7 @@ contract SBGE {
         createDAILiquidity(totalDAI);
         preBuyForGroup(totalDAI);
 
-        dai.transfer(owner, dai.balanceOf(address(this)));
+        dai.transfer(owner, dai.balanceOf(address(this))); //Dev fund/payment
   
         portal.setFreeTransfers(false);
     }
@@ -324,10 +322,9 @@ contract SBGE {
     function createDAILiquidity(uint256 totalDAI) internal {
         wdai.deposit(totalDAI.mul(daiPoolPercent).div(20000));
         
-        //Deposit wDAI/DAI at 1:1 ratio
+        //Deposit wDAI/DAI at 1:1 ratio - use same wDAI balance as parameter to ensure 1:1
         (,,totalDAIwdai) = uniswapV2Router.addLiquidity(address(wdai), address(dai), wdai.balanceOf(address(this)), wdai.balanceOf(address(this)), 0, 0, address(this), block.timestamp);
-        book_lpToken = IERC20(uniswapV2Factory.getPair(address(wdai), address(dai)));
-
+        
     }
 
     function createBOOKwdaiLiquidity(uint256 totalDAI) internal{
@@ -335,10 +332,11 @@ contract SBGE {
         wdai.deposit(totalDAI.mul(poolPercent).div(10000));
 
         (,,totalBOOKwdai) = uniswapV2Router.addLiquidity(address(wdai), address(BOOK), wdai.balanceOf(address(this)), BOOK.totalSupply(), 0, 0, address(this), block.timestamp);
+        book_lpToken = IERC20(uniswapV2Factory.getPair(address(wdai), address(BOOK)));
 
     }
 
-     function retrieveDAI() internal{
+    function retrieveDAI() internal{
         wdai.fund(address(this));
         wdai.withdraw(wdai.balanceOf(address(this)));
     }
@@ -347,7 +345,7 @@ contract SBGE {
         uint256 totalDAI = totalDAICollected;
 
         // Send Book/wDAI liquidity tokens
-        uint256 share = _contribution.mul(totalBOOKwdai) / totalDAI;        
+        uint256 share = _contribution.mul(totalBOOKwdai) / totalDAI;
         if (share > book_lpToken.balanceOf(address(this))) {
             share = book_lpToken.balanceOf(address(this));
         }
@@ -366,6 +364,4 @@ contract SBGE {
         portal.setFreeTransfers(false);
     }
 
-    
-    
 }
