@@ -9,8 +9,6 @@ import './uniswap/libraries/TransferHelper.sol';
 import './uniswap/IUniswapV2Pair.sol';
 import './SafeMath.sol';
 
-import 'hardhat/console.sol';
-
 /*
 
  Convenience contract for Book Token Protocol. Allows for purchase of Book Token without wDAI, and sale of Book Token directly to other token
@@ -47,7 +45,7 @@ contract BookSwap {
         dai.transferFrom(msg.sender, address(this), amt);
         wdai.deposit(amt);
         uint256 post_wdaiBalance = wdai.balanceOf(address(this));
-        require(post_wdaiBalance == (amt+pre_wdaiBalance), "Error: Wrap");
+        require(post_wdaiBalance == (amt.add(pre_wdaiBalance)), "Error: Wrap");
 
         uint256 pre_bookBalance = book.balanceOf(address(this));
         address[] memory path = new address[](2);
@@ -61,7 +59,6 @@ contract BookSwap {
     }
 
     function sellBookforDAI(uint256 amt) public {
-        
         book.transferFrom(msg.sender, address(this), amt);
         address[] memory path = new address[](2);
         path[0] = address(book);
@@ -79,7 +76,7 @@ contract BookSwap {
 
         uint256 post_daiBalance = dai.balanceOf(address(this));
         require(post_daiBalance > pre_daiBalance, "Error: Unwrap");
-        require(post_daiBalance.sub(pre_daiBalance) == (post_wdaiBalance-pre_wdaiBalance), "Error: Check");
+        require(post_daiBalance.sub(pre_daiBalance) == (post_wdaiBalance.sub(pre_wdaiBalance)), "Error: Check");
         uint256 daiAmt = post_daiBalance.sub(pre_daiBalance);
         dai.transfer(msg.sender, daiAmt);
     }

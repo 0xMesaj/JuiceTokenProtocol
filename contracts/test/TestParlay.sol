@@ -3,7 +3,6 @@ pragma experimental ABIEncoderV2;
 import "../strings.sol";
 import "./TestToken.sol";
 import "../SafeMath.sol";
-import 'hardhat/console.sol';
 
 
 contract TestParlay{

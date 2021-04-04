@@ -11,7 +11,6 @@ import "./interfaces/IBookVault.sol";
 import "./uniswap/IUniswapV2Router02.sol";
 import "./uniswap/IUniswapV2Factory.sol";
 
-import 'hardhat/console.sol';
 
 /*
     Book Treasury holds DAI liquidity for the BOOK token protocol - to be utilized in approved
@@ -28,7 +27,7 @@ contract BookTreasury {
     bytes32 public constant DOMAIN_TYPEHASH = keccak256("EIP712Domain(string name,uint256 chainId,address verifyingContract)");
     bytes32 public constant BALLOT_TYPEHASH = keccak256("Ballot(uint256 proposalId,bool support)");
 
-    uint proposalCount;
+    uint public proposalCount;
     uint256 MIN_REQUIREMENT = uint(-1);
     address mesaj;
     IBookToken BOOK;
@@ -106,6 +105,7 @@ contract BookTreasury {
     }
 
     function setWDAI( IWDAI _wdai ) external isTreasurer(){
+        require( address(WDAI) == address(0x0), "Wrapped DAI already set");
         WDAI = _wdai;
         WDAI.approve(address(router),uint(-1));
     }
@@ -116,6 +116,7 @@ contract BookTreasury {
         MIN_REQUIREMENT = _amount;    
     }
 
+    //Set allowance for strategy to new _amount
     function setAllowance( uint256 _amount, address _strategy) external isTreasurer(){
         require(strategies[_strategy], "Requested address not valid strategy");
         uint DAIreserve = DAI.balanceOf(address(this));

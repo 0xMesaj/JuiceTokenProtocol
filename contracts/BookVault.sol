@@ -4,8 +4,6 @@ import "./interfaces/IERC20.sol";
 import "./SafeMath.sol";
 import "./SafeERC20.sol";
 
-import 'hardhat/console.sol';
-
 contract BookVault{
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
@@ -80,10 +78,8 @@ contract BookVault{
     }
 
     function pendingReward(uint256 _poolId, address _user) external view returns (uint256) {
-        console.log("Inside Pending Reward");
         PoolInfo storage pool = poolInfo[_poolId];
         UserInfo storage user = userInfo[_poolId][_user];
-        console.log("User amt staked:%s",user.amountStaked);
         uint256 accRewardPerShare = pool.accRewardPerShare;
         uint256 supply = pool.token.balanceOf(address(this));
         uint256 balance = rewardToken.balanceOf(address(this));

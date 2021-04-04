@@ -7,8 +7,6 @@ import "./uniswap/libraries/UniswapV2Library.sol";
 import "./uniswap/IUniswapV2Factory.sol";
 import './interfaces/IERC20.sol';
 
-import 'hardhat/console.sol';
-
 contract LockedLiqCalculator is ILockedLiqCalculator{
     using SafeMath for uint256;
 

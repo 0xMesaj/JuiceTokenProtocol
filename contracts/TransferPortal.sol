@@ -1,18 +1,6 @@
 pragma solidity ^0.7.0;
 pragma experimental ABIEncoderV2;
 
-/*
-It:
-    Allows customization of tax and burn rates
-    Allows transfer to/from approved Uniswap pools
-    Disallows transfer to/from non-approved Uniswap pools
-    (doesn't interfere with other crappy AMMs)
-    Allows transfer to/from anywhere else
-    Allows for free transfers if permission granted
-    Allows for unrestricted transfers if permission granted
-    Provides a safe and tax-free liquidity adding function
-*/
-
 import "./interfaces/ITransferPortal.sol";
 import "./interfaces/IERC20.sol";
 import "./uniswap/IUniswapV2Pair.sol";
@@ -23,7 +11,7 @@ import "./Address.sol";
 import "./SafeERC20.sol";
 import "./SafeMath.sol";
 
-//Scaled up by 100 - 10000 = 100%
+//Scaled up by 100: 10000 = 100%
 struct BOOKTransferPortalParameters{
     address dev;
     uint16 devRewardRate;
@@ -36,7 +24,7 @@ contract TransferPortal is ITransferPortal{
     using SafeERC20 for IERC20;
     using SafeMath for uint256;
 
-    address owner;
+    address mesaj;
 
     enum AddressState{
         Unknown,
@@ -45,8 +33,8 @@ contract TransferPortal is ITransferPortal{
         AllowedPool
     }
 
-    modifier ownerOnly(){
-        require (msg.sender == owner, "Owner only");
+    modifier mesajOnly(){
+        require (msg.sender == mesaj, "Mesaj only");
         _;
     }
 
@@ -61,13 +49,11 @@ contract TransferPortal is ITransferPortal{
     bool public unrestricted;
     mapping (address => bool) public taxationController;
     mapping (address => bool) public taxation;
-
     mapping (address => uint256) public liquiditySupply;
     address public mustUpdate;    
 
     constructor(BookToken _BOOK, IUniswapV2Router02 _uniswapV2Router){
-    // constructor(BookToken _BOOK){
-        owner = msg.sender;
+        mesaj = msg.sender;
         BOOK = _BOOK;
         uniswapV2Router = _uniswapV2Router;
         uniswapV2Factory = IUniswapV2Factory(_uniswapV2Router.factory());
@@ -75,11 +61,11 @@ contract TransferPortal is ITransferPortal{
 
     function allowedPoolTokensCount() public view returns (uint256) { return allowedPoolTokens.length; }
 
-    function setController(address unrestrictedController, bool allow) public ownerOnly(){
+    function setController(address unrestrictedController, bool allow) public mesajOnly(){
         taxationController[unrestrictedController] = allow;
     }
 
-    function noTaxation(address addr, bool isTaxFree) public ownerOnly(){
+    function noTaxation(address addr, bool isTaxFree) public mesajOnly(){
         taxation[addr] = isTaxFree;
     }
 
@@ -88,7 +74,7 @@ contract TransferPortal is ITransferPortal{
         unrestricted = _unrestricted;
     }
 
-    function setParameters(address _dev, address _vault, uint16 _vaultRewardRate, uint16 _devRate) public ownerOnly(){
+    function setParameters(address _dev, address _vault, uint16 _vaultRewardRate, uint16 _devRate) public mesajOnly(){
         require (_dev != address(0) && _vault != address(0));
         require (_vaultRewardRate <= 500 && _devRate <= 10, "Sanity");
         
@@ -100,7 +86,7 @@ contract TransferPortal is ITransferPortal{
         parameters = _parameters;
     }
 
-    function allowPool(IERC20 token) public ownerOnly(){
+    function allowPool(IERC20 token) public mesajOnly(){
         address pool = uniswapV2Factory.getPair(address(BOOK), address(token));
         if (pool == address(0)) {
             pool = uniswapV2Factory.createPair(address(BOOK), address(token));
@@ -183,7 +169,7 @@ contract TransferPortal is ITransferPortal{
         }
     }
 
-    function setAddressState(address a, AddressState state) public ownerOnly(){
+    function setAddressState(address a, AddressState state) public mesajOnly(){
         addressStates[a] = state;
     }
 

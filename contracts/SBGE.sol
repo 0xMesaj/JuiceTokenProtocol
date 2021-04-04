@@ -1,7 +1,5 @@
 pragma solidity ^0.7.0;
 
-import 'hardhat/console.sol';
-
 import './BookToken.sol';
 import './SafeMath.sol';
 import './TransferPortal.sol';
@@ -19,14 +17,13 @@ import './uniswap/libraries/UniswapV2Library.sol';
 
 /*
     Sports Book Generation Contract - Once activated this contract will gather liquidity from
-    contributors over a period of a week. Once completed this contract will initialize the
-    BOOK-wDAI and wDAI-DAI UNI LPs. This contract will then use a portion of the liquidity
-    generated to do a market buy of BOOK Token for the contributors, which will be at the 
-    floor price of BOOK. This is to prevent greedy bots and instead give the value to SBGE
-    contributors.
+    contributors. Once completed this contract will initialize the BOOK-wDAI and wDAI-DAI UNI LPs.
+    This contract will then use a portion of the liquidity generated to market buy BOOK
+    Token to be distributed to the contributors, which will be at the floor price of BOOK. This is to prevent 
+    greedy bots and instead SBGE contributors are in at the floor price.
 
     This contract accepts many different forms of contributions: DAI, ETH, Uniswap or Sushiswap LP
-    Tokens, or any token that this contract can flash swap for DAI on Uniswap. All contributions will
+    Tokens, or any token that this contract can be flash swapped for DAI on Uniswap. All contributions will
     be denominated in DAI. LP tokens are unwrapped and the underlying tokens are sold for DAI.
 */
 
@@ -38,18 +35,19 @@ contract SBGE {
     event Contribution(uint256 DAIamt, address from);
 
     uint256 public totalDAIContribution = 0;
-
     address[] public contributors;
     bool public isActive;
     uint256 refundsAllowedUntil;
-    address public owner;
+    address public mesaj;
     address public DAI;
     IWETH public WETH;
     address public uniswapFactory;
     address public sushiswapFactory;
     bool public distributionComplete;
+
     IUniswapV2Router02 immutable uniswapV2Router;
     IUniswapV2Factory immutable uniswapV2Factory;
+
     BookToken immutable BOOK;
     WDAI immutable wdai;
     IERC20 immutable dai;
@@ -58,21 +56,20 @@ contract SBGE {
     IUniswapV2Pair BOOKwdai;
     IERC20 book_lpToken;
 
-
     uint256 public totalDAICollected;
     uint256 public totalBOOKBought;
     uint256 public totalBOOKwdai;
     uint256 public totalDAIwdai;
 
-    // Scaled By a Factor of 100, 10000 = 100%
+    // Scaled By a Factor of 100: 10000 = 100%
     uint16 constant public poolPercent = 8000; // BOOK-wDAI Liquidity Pool
     uint16 constant public daiPoolPercent = 600; // DAI-wDAI Liquidity Pool
     uint16 constant public buyPercent = 400; // Used to execute initial purchase of BOOK token from LP for contributors
     uint16 constant public development = 500; // Developemt/Project Fund
     uint16 constant public devPayment = 500; // Payment
 
-    modifier ownerOnly(){
-        require (msg.sender == owner, "Owner only");
+    modifier isMesaj(){
+        require (msg.sender == mesaj, "No");
         _;
     }
 
@@ -91,7 +88,7 @@ contract SBGE {
         WETH = _WETH; // FAKE WETH ADDR
         // uniswapFactory = 0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f;
         // sushiswapFactory = 0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac;
-        owner = msg.sender;
+        mesaj = msg.sender;
 
         uniswapV2Router = _uniswapV2Router;
         wdai = _wdai;
@@ -107,21 +104,22 @@ contract SBGE {
         _WETH.approve(address(_uniswapV2Router), uint256(-1));
     }
 
-    function activate() public ownerOnly(){
+    function activate() public isMesaj(){
         require (!isActive && contributors.length == 0 && block.timestamp >= refundsAllowedUntil, "Already activated");
-        require (BOOK.balanceOf(address(this)) == BOOK.totalSupply(), "Missing supply");
+        require (BOOK.balanceOf(address(this)) == BOOK.totalSupply(), "Total token supply required to activate SBGE");
 
         isActive = true;
     }
 
-    function complete() public ownerOnly() active(){
+    function complete() public isMesaj() active(){
         require (block.timestamp >= refundsAllowedUntil, "Refund period active");
+        require (totalDAIContribution > 0, "Sad Mesaj");
         isActive = false;
-        if (totalDAIContribution == 0) { return; }
         distribute();
     }
 
-    function allowRefunds() public ownerOnly() active(){
+    // Trigger refund - This will make the completion function uncallable
+    function allowRefunds() public isMesaj() active(){
         isActive = false;
         refundsAllowedUntil = uint256(-1);
     }
@@ -143,7 +141,7 @@ contract SBGE {
         emit Contribution(_amount, msg.sender);
     }
 
-    // ERC20 Token / LP Token Contribution
+    // ERC20 Token or Uni V2/Sushi LP Token Contribution
     function contributeToken(address _token, uint256 _amount) external payable active(){
         require(_amount > 0, "Contribution amount must be greater than 0");
         uint256 oldContribution = daiContribution[msg.sender];
@@ -172,11 +170,11 @@ contract SBGE {
             uint256 balanceToken0After = IERC20(token0).balanceOf(address(this));
             uint256 balanceToken1After = IERC20(token1).balanceOf(address(this));
 
-            uint256 amountOutToken0 = token0 == address(dai) ? 
+            uint256 amountOutToken0 = token0 == address(dai) ?
                 balanceToken0After.sub(balanceToken0Before)
                 : sellTokenForDAI(token0, balanceToken0After.sub(balanceToken0Before), false);
 
-            uint256 amountOutToken1 = token1 == address(dai) ? 
+            uint256 amountOutToken1 = token1 == address(dai) ?
                 balanceToken1After.sub(balanceToken1Before)
                 : sellTokenForDAI(token1, balanceToken1After.sub(balanceToken1Before), false);
 
@@ -197,6 +195,7 @@ contract SBGE {
             require(balanceDAIOld < balanceDAINew, "DAI Received From Sale Insufficient");
             totalDAIContribution = totalDAIContribution.add(amountOut);
             daiContribution[msg.sender] = daiContribution[msg.sender].add(amountOut);
+            emit Contribution(totalDAIAdded, msg.sender);
         }
         require(daiContribution[msg.sender] > oldContribution, "No new contribution added.");
     }
@@ -218,6 +217,7 @@ contract SBGE {
 
         require(amountOut > 0, 'No DAI received from sale');
         daiContribution[msg.sender] += amountOut;
+        emit Contribution(amountOut, msg.sender);
     }
 
     function claim() public{
@@ -278,7 +278,7 @@ contract SBGE {
     }
 
 
-    function setupBOOKwdai() public ownerOnly() {
+    function setupBOOKwdai() public isMesaj() {
         BOOKwdai = IUniswapV2Pair(uniswapV2Factory.getPair(address(wdai), address(BOOK)));
         if (address(BOOKwdai) == address(0)) {
             BOOKwdai = IUniswapV2Pair(uniswapV2Factory.createPair(address(wdai), address(BOOK)));
@@ -286,7 +286,7 @@ contract SBGE {
         }
     }
 
-    function preBuyForGroup(uint256 amount) internal {      
+    function preBuyForGroup(uint256 amount) internal {
         address[] memory path = new address[](2);
         path[0] = address(wdai);
         path[1] = address(BOOK);
@@ -300,10 +300,8 @@ contract SBGE {
     function distribute() internal {
         require (!distributionComplete, "Distribution complete");
         uint256 totalDAI = totalDAIContribution;
-
-        // console.log('total: %s',totalDAI);
         
-        require (totalDAI > 0, "Sad...");
+        require (totalDAI > 0, "Sad Mesaj");
         distributionComplete = true;
         totalDAICollected = totalDAI;
 
@@ -314,17 +312,17 @@ contract SBGE {
         createDAILiquidity(totalDAI);
         preBuyForGroup(totalDAI);
 
-        dai.transfer(owner, dai.balanceOf(address(this))); //Dev fund/payment
+        dai.transfer(mesaj, dai.balanceOf(address(this))); //Dev fund/payment
   
         portal.setFreeTransfers(false);
     }
 
     function createDAILiquidity(uint256 totalDAI) internal {
+        //Wrap half allocated DAI liquidity into wDAI
         wdai.deposit(totalDAI.mul(daiPoolPercent).div(20000));
         
         //Deposit wDAI/DAI at 1:1 ratio - use same wDAI balance as parameter to ensure 1:1
         (,,totalDAIwdai) = uniswapV2Router.addLiquidity(address(wdai), address(dai), wdai.balanceOf(address(this)), wdai.balanceOf(address(this)), 0, 0, address(this), block.timestamp);
-        
     }
 
     function createBOOKwdaiLiquidity(uint256 totalDAI) internal{
@@ -333,12 +331,6 @@ contract SBGE {
 
         (,,totalBOOKwdai) = uniswapV2Router.addLiquidity(address(wdai), address(BOOK), wdai.balanceOf(address(this)), BOOK.totalSupply(), 0, 0, address(this), block.timestamp);
         book_lpToken = IERC20(uniswapV2Factory.getPair(address(wdai), address(BOOK)));
-
-    }
-
-    function retrieveDAI() internal{
-        wdai.fund(address(this));
-        wdai.withdraw(wdai.balanceOf(address(this)));
     }
 
     function _claim(address _to, uint256 _contribution) internal {

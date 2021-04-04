@@ -8,7 +8,6 @@ import "./interfaces/IERC20.sol";
 import "./interfaces/IBookVault.sol";
 import "./uniswap/IUniswapV2Factory.sol";
 
-import 'hardhat/console.sol';
 /*
     BOOK Token has a transfer portal that is upgradeable by on-chain governance
     Total Initial Supply: 28 Million
@@ -25,25 +24,14 @@ contract BookToken is ERC20{
     event Withdrawal(address indexed to, uint256 amount);
 
     address public mesaj;
-    IERC20 DAI;
-    IERC20 WDAI;
-    IUniswapV2Factory factory;
+
     ITransferPortal public transferPortal;
     IBookVault vault;
-    uint proposalCount;
+    uint public proposalCount;
 
     modifier ownerOnly(){
         require (msg.sender == mesaj, "Owner only");
         _;
-    }
-
-    constructor(string memory _name, string memory _symbol, IERC20 _DAI, IUniswapV2Factory _factory) ERC20(_name,_symbol) {
-        mesaj = msg.sender;
-        treasurers[mesaj] = true;
-
-        factory = _factory;
-        DAI = _DAI;
-        _mint(mesaj, 28000000000000000000000000); //28 Milli
     }
 
     struct Proposal {
@@ -85,8 +73,15 @@ contract BookToken is ERC20{
         _;
     }
 
+    constructor( string memory _name, string memory _symbol ) ERC20(_name,_symbol) {
+        mesaj = msg.sender;
+        treasurers[mesaj] = true;
+
+        _mint(mesaj, 28000000000000000000000000); // 28 Milli
+    }
+
     function setTreasurer(address appointee) public isTreasurer(){
-        require(!treasurers[appointee], "Appointee is already treasurer.");
+        require(!treasurers[appointee], "Appointee is already treasurer");
         treasurers[appointee] = true;
     }
 
@@ -170,7 +165,6 @@ contract BookToken is ERC20{
         }
     }
 
-
     function setTransferPortal(ITransferPortal _transferPortal) external ownerOnly(){
         transferPortal = _transferPortal;
     }
@@ -222,11 +216,6 @@ contract BookToken is ERC20{
         uint chainId;
         assembly { chainId := chainid() }
         return chainId;
-    }
-
-    function setWDAI( IERC20 _WDAI) external isTreasurer(){
-        require( address(WDAI) == address(0x0), "Wrapped DAI already set");
-        WDAI = _WDAI;
     }
 
     function setBookVault( IBookVault _vault ) external isTreasurer(){

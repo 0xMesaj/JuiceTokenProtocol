@@ -34,7 +34,7 @@ describe('Book Protocol Sim', () => {
 
     it('Sim', async () => {
         //Deploy
-        const BOOKtoken = await BOOK.deploy("BOOK Token","BOOK", uniswap.dai.address, uniswap.factory.address);
+        const BOOKtoken = await BOOK.deploy("BOOK","BOOK");
         const BookVault = await BookVaultFactory.deploy(BOOKtoken.address);
         const portal = await TransferPortalFactory.deploy(BOOKtoken.address,uniswap.router.address);
         const DAItoken = await uniswap.dai;     
@@ -46,7 +46,7 @@ describe('Book Protocol Sim', () => {
         const BookSwap = await BookSwapFactory.deploy(BOOKtoken.address,wDAI.address,uniswap.router.address)
 
         await BookTreasury.connect(owner).setWDAI(wDAI.address);
-        await BOOKtoken.connect(owner).setWDAI(wDAI.address);
+        
         await BOOKtoken.connect(owner).setBookVault(BookVault.address);
         // await SportsBook.connect(mesaj).setTreasury(BookTreasury.address);
         
@@ -91,7 +91,7 @@ describe('Book Protocol Sim', () => {
         await uniswap.wbtc.approve(sbge.address, constants.MaxUint256, { from: owner.address });
         await sbge.connect(owner).activate();
         
-        //Approvals For Transfers
+        // Consent is sexy
         await DAItoken.connect(owner).approve(BookSwap.address,constants.MaxUint256);
         await BOOKtoken.connect(owner).approve(BookSwap.address,constants.MaxUint256);
         await DAItoken.connect(aThree).approve(sbge.address,constants.MaxUint256);
@@ -125,7 +125,7 @@ describe('Book Protocol Sim', () => {
         await ethMan.sendTransaction({ to: sbge.address, value: utils.parseEther("2") })
     
         //WETH Contribution Test
-        await sbge.connect(mesaj).contributeToken(weth.address,utils.parseEther("2"));
+        await sbge.connect(mesaj).contributeToken(weth.address, utils.parseEther("2"));
 
         //LP Token Contribution Test
         await sbge.connect(lpMan).contributeToken(WETHWBTC.address,await WETHWBTC.balanceOf(lpMan.address));

@@ -4,7 +4,7 @@
 
 // hevm: flattened sources of /nix/store/8xb41r4qd0cjb63wcrxf1qmfg88p0961-dss-6fd7de0/src/dai.sol
 pragma solidity ^0.7.3;
-import 'hardhat/console.sol';
+
 ////// /nix/store/8xb41r4qd0cjb63wcrxf1qmfg88p0961-dss-6fd7de0/src/lib.sol
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by

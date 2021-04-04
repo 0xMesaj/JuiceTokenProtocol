@@ -3,8 +3,6 @@
 
 pragma solidity ^0.7.0;
 
-import 'hardhat/console.sol';
-
 import "./SafeERC20.sol";
 import "./ERC20.sol";
 import "./interfaces/ILockedLiqCalculator.sol";
@@ -30,7 +28,7 @@ contract WDAI is ERC20{
     mapping (address => bool) public quaestor;
     mapping (address => bool) public treasury;
 
-    uint proposalCount;
+    uint public proposalCount;
     IERC20 public immutable wrappedToken;
     IUniswapV2Factory factory;
     ILockedLiqCalculator public lockedLiqCalculator;
@@ -45,6 +43,7 @@ contract WDAI is ERC20{
         uint endBlock;
         uint forVotes;
         uint againstVotes;
+        uint minVotes;
         bool canceled;
         bool executed;
         mapping (address => Receipt) receipts;
@@ -71,8 +70,8 @@ contract WDAI is ERC20{
     mapping (uint => Proposal) public proposals;
 
 
-    modifier ownerOnly(){
-        require (msg.sender == mesaj, "Owner only");
+    modifier mesajOnly(){
+        require (msg.sender == mesaj, "Mesaj only");
         _;
     }
 
@@ -87,15 +86,25 @@ contract WDAI is ERC20{
         mesaj = msg.sender;
     }
 
-    function setLiquidityCalculator(ILockedLiqCalculator _lockedLiqCalculator) external ownerOnly(){
+    /* Set the address for initial lockedLiqCalculator, cannot be recalled after first execution -
+       Only way to change lockedLiqCalculator is through governance proposals */
+    function setLiquidityCalculator(ILockedLiqCalculator _lockedLiqCalculator) external mesajOnly(){
+        require(lockedLiqCalculator == 0x0, "Function no longer callable after first execution");
         lockedLiqCalculator = _lockedLiqCalculator;
     }
 
-    function promoteQuaestor(address sweeper, bool _isApproved) external ownerOnly(){
+    function promoteQuaestor(address sweeper, bool _isApproved) external mesajOnly(){
         quaestor[sweeper] = _isApproved;
     }
 
-    function designateTreasury(address _treasury, bool _isApproved) external ownerOnly(){
+    function abdicate(address shame) public{
+        require(mesaj != shame, "Et tu, Brute?");
+        require (quaestor[msg.sender], "Error: Quaestors only");
+        treasurers[shame] = false;
+    }
+
+    function designateTreasury(address _treasury, bool _isApproved) external mesajOnly(){
+        require (quaestor[msg.sender], "Error: Quaestors only");
         treasury[_treasury] = _isApproved;
     }
 
@@ -131,21 +140,22 @@ contract WDAI is ERC20{
         }
     }
 
-    // Wrap
+    // Wrap: DAI -> wDAI
     function deposit(uint256 _amount) public{
         wrappedToken.transferFrom(msg.sender,address(this), _amount);
         _mint(msg.sender, _amount);
         emit Deposit(msg.sender, _amount); 
     }
 
-    // Unwrap
+    // Unwrap: wDAI -> DAI
     function withdraw(uint256 _amount) public{
         _burn(msg.sender, _amount);
         wrappedToken.transferFrom(address(this),msg.sender, _amount);
         emit Withdrawal(msg.sender, _amount);
     }  
 
-    function proposeStrategy(address _strategy) public ownerOnly(){
+    function proposeStrategy(address _strategy) public {
+        require (quaestor[msg.sender], "Error: Quaestors only");
         uint _startBlock = block.number;
         uint _endBlock = _startBlock.add(5760);
 
@@ -158,6 +168,7 @@ contract WDAI is ERC20{
         p.endBlock = _endBlock;
         p.forVotes = 0;
         p.againstVotes = 0;
+        p.minVotes = getMinRequiredVotes();
         p.canceled = false;
         p.executed = false;
         emit ProposalCreated(p.id, _startBlock, _endBlock, _strategy);
@@ -210,9 +221,8 @@ contract WDAI is ERC20{
 
     function judgeProposal(uint proposalID) public {
         Proposal storage p = proposals[proposalID];
-        uint MIN_VOTES = getMinRequiredVotes();
         require(block.timestamp > p.endBlock, 'Proposal Ongoing');
-        if((p.forVotes > p.againstVotes) || (p.againstVotes < MIN_VOTES)){
+        if((p.forVotes > p.againstVotes) || (p.againstVotes < p.minVotes)){
             lockedLiqCalculator = ILockedLiqCalculator(p.upgrade);
             p.executed = true;
         }else{
