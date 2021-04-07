@@ -4,7 +4,7 @@ import "./interfaces/IERC20.sol";
 import "./SafeMath.sol";
 import "./SafeERC20.sol";
 
-contract BookVault{
+contract JuiceBookVault{
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
@@ -25,10 +25,10 @@ contract BookVault{
         uint256 accRewardPerShare;
     }
 
-    address owner;
+    address mesaj;
 
-    modifier ownerOnly(){
-        require (msg.sender == owner, "Owner only");
+    modifier mesajOnly(){
+        require (msg.sender == mesaj, "Mesaj only");
         _;
     }
 
@@ -47,7 +47,7 @@ contract BookVault{
     uint256 public emergencyRecoveryTimestamp;
 
     constructor(IERC20 _rewardToken){
-        owner = msg.sender;
+        mesaj = msg.sender;
         rewardToken = _rewardToken;
     }
 
@@ -55,7 +55,7 @@ contract BookVault{
         return poolInfo.length;
     }
 
-    function addPool(uint256 _allocationPoints, IERC20 _token) public ownerOnly(){
+    function addPool(uint256 _allocationPoints, IERC20 _token) public mesajOnly(){
         require (address(_token) != address(0) && _token != rewardToken && emergencyRecoveryTimestamp == 0);
         require (!existingPools[_token], "Pool exists");
         require (poolInfo.length < maxPoolCount, "Too many pools");
@@ -70,7 +70,7 @@ contract BookVault{
         }));
     }
 
-    function setPoolAllocationPoints(uint256 _poolId, uint256 _allocationPoints) public ownerOnly(){
+    function setPoolAllocationPoints(uint256 _poolId, uint256 _allocationPoints) public mesajOnly(){
         require (emergencyRecoveryTimestamp == 0);
         massUpdatePools();
         totalAllocationPoints = totalAllocationPoints.sub(poolInfo[_poolId].allocationPoints).add(_allocationPoints);
@@ -94,8 +94,8 @@ contract BookVault{
         return user.amountStaked.mul(accRewardPerShare).div(1e12).sub(user.rewardDebt);
     }
 
-    function getPooledBook(uint256 _poolID) public view returns(uint256 pooledBook) {
-        pooledBook = rewardToken.balanceOf(address(poolInfo[_poolID].token));
+    function getPooledJBT(uint256 _poolID) public view returns(uint256 pooledJBT) {
+        pooledJBT = rewardToken.balanceOf(address(poolInfo[_poolID].token));
     }
 
     function massUpdatePools() public {
@@ -176,7 +176,7 @@ contract BookVault{
         lastRewardBalance = rewardToken.balanceOf(address(this));
     }
 
-    function declareEmergency() public ownerOnly() {
+    function declareEmergency() public mesajOnly() {
         // Funds will be recoverable 3 days after an emergency is declared
         // By then, everyone should have withdrawn whatever they can
         // Failing that (which is probably why there's an emergency) we can recover for them

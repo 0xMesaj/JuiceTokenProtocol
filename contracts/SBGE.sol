@@ -1,14 +1,14 @@
 pragma solidity ^0.7.0;
 
-import './BookToken.sol';
 import './SafeMath.sol';
 import './TransferPortal.sol';
 import './WDAI.sol';
+import './interfaces/IJuiceBookToken.sol';
 import './interfaces/IBookLiquidity.sol';
 import './interfaces/IBookTokenDistribution.sol';
 import './interfaces/IERC20.sol';
 import './interfaces/IWETH.sol';
-import './interfaces/IBookTreasury.sol';
+import './interfaces/IJuiceBookTreasury.sol';
 import './uniswap/IUniswapV2Pair.sol';
 import './uniswap/IUniswapV2Factory.sol';
 import './uniswap/libraries/TransferHelper.sol';
@@ -48,23 +48,23 @@ contract SBGE {
     IUniswapV2Router02 immutable uniswapV2Router;
     IUniswapV2Factory immutable uniswapV2Factory;
 
-    BookToken immutable BOOK;
+    IJuiceBookToken immutable JBT;
     WDAI immutable wdai;
     IERC20 immutable dai;
-    IBookTreasury immutable treasury;
+    IJuiceBookTreasury immutable treasury;
 
-    IUniswapV2Pair BOOKwdai;
-    IERC20 book_lpToken;
+    IUniswapV2Pair JBTwdai;
+    IERC20 lpToken;
 
     uint256 public totalDAICollected;
-    uint256 public totalBOOKBought;
-    uint256 public totalBOOKwdai;
+    uint256 public totalJBTBought;
+    uint256 public totalJBTwdai;
     uint256 public totalDAIwdai;
 
     // Scaled By a Factor of 100: 10000 = 100%
-    uint16 constant public poolPercent = 8000; // BOOK-wDAI Liquidity Pool
+    uint16 constant public poolPercent = 8000; // JBT-wDAI Liquidity Pool
     uint16 constant public daiPoolPercent = 600; // DAI-wDAI Liquidity Pool
-    uint16 constant public buyPercent = 400; // Used to execute initial purchase of BOOK token from LP for contributors
+    uint16 constant public buyPercent = 400; // Used to execute initial purchase of JBT from LP for contributors
     uint16 constant public development = 500; // Developemt/Project Fund
     uint16 constant public devPayment = 500; // Payment
 
@@ -78,11 +78,11 @@ contract SBGE {
         _;
     }
 
-    constructor(BookToken _BOOK, IUniswapV2Router02 _uniswapV2Router, WDAI _wdai, IBookTreasury _treasury, IWETH _WETH){
-        require (address(_BOOK) != address(0));
-        require (address(_treasury) != address(0));
+    constructor(IJuiceBookToken _JBT, IUniswapV2Router02 _uniswapV2Router, WDAI _wdai, IJuiceBookTreasury _treasury, IWETH _WETH){
+        require (address(_JBT) != address(0x0));
+        require (address(_treasury) != address(0x0));
 
-        BOOK = _BOOK;
+        JBT = _JBT;
         // DAI = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
         // WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;   //REAL WETH ADDR
         WETH = _WETH; // FAKE WETH ADDR
@@ -100,20 +100,20 @@ contract SBGE {
         _wdai.wrappedToken().approve(address(_wdai),uint(-1));
         _wdai.approve(address(_uniswapV2Router), uint256(-1));
         _wdai.wrappedToken().approve(address(_uniswapV2Router), uint256(-1));
-        _BOOK.approve(address(_uniswapV2Router), uint256(-1));
+        _JBT.approve(address(_uniswapV2Router), uint256(-1));
         _WETH.approve(address(_uniswapV2Router), uint256(-1));
     }
 
     function activate() public isMesaj(){
         require (!isActive && contributors.length == 0 && block.timestamp >= refundsAllowedUntil, "Already activated");
-        require (BOOK.balanceOf(address(this)) == BOOK.totalSupply(), "Total token supply required to activate SBGE");
+        require (JBT.balanceOf(address(this)) == JBT.totalSupply(), "Total token supply required to activate SBGE");
 
         isActive = true;
     }
 
     function complete() public isMesaj() active(){
         require (block.timestamp >= refundsAllowedUntil, "Refund period active");
-        require (totalDAIContribution > 0, "Sad Mesaj");
+        require (totalDAIContribution > 0, "No liquidity generated");
         isActive = false;
         distribute();
     }
@@ -195,7 +195,7 @@ contract SBGE {
             require(balanceDAIOld < balanceDAINew, "DAI Received From Sale Insufficient");
             totalDAIContribution = totalDAIContribution.add(amountOut);
             daiContribution[msg.sender] = daiContribution[msg.sender].add(amountOut);
-            emit Contribution(totalDAIAdded, msg.sender);
+            emit Contribution(amountOut, msg.sender);
         }
         require(daiContribution[msg.sender] > oldContribution, "No new contribution added.");
     }
@@ -228,7 +228,7 @@ contract SBGE {
 
         /*
             If refund is active refund DAI contribution -
-            else claim their LP and BOOK token
+            else claim their LP and JBT token
         */
         if (refundsAllowedUntil > block.timestamp) {
             dai.transfer(msg.sender, amount);
@@ -278,22 +278,22 @@ contract SBGE {
     }
 
 
-    function setupBOOKwdai() public isMesaj() {
-        BOOKwdai = IUniswapV2Pair(uniswapV2Factory.getPair(address(wdai), address(BOOK)));
-        if (address(BOOKwdai) == address(0)) {
-            BOOKwdai = IUniswapV2Pair(uniswapV2Factory.createPair(address(wdai), address(BOOK)));
-            require (address(BOOKwdai) != address(0));
+    function setupJBTwdai() public isMesaj() {
+        JBTwdai = IUniswapV2Pair(uniswapV2Factory.getPair(address(wdai), address(JBT)));
+        if (address(JBTwdai) == address(0)) {
+            JBTwdai = IUniswapV2Pair(uniswapV2Factory.createPair(address(wdai), address(JBT)));
+            require (address(JBTwdai) != address(0));
         }
     }
 
     function preBuyForGroup(uint256 amount) internal {
         address[] memory path = new address[](2);
         path[0] = address(wdai);
-        path[1] = address(BOOK);
+        path[1] = address(JBT);
         uint256 wrapAmount = amount.mul(buyPercent).div(10000);
         wdai.deposit(wrapAmount);
         uint256 buyAmount = wdai.balanceOf(address(this));
-        uint256[] memory amountsBOOK = uniswapV2Router.swapExactTokensForTokens(buyAmount, 0, path, address(this), block.timestamp);
+        uint256[] memory amountsJBT = uniswapV2Router.swapExactTokensForTokens(buyAmount, 0, path, address(this), block.timestamp);
 
     }
 
@@ -305,10 +305,10 @@ contract SBGE {
         distributionComplete = true;
         totalDAICollected = totalDAI;
 
-        TransferPortal portal = TransferPortal(address(BOOK.transferPortal()));
+        TransferPortal portal = TransferPortal(address(JBT.transferPortal()));
         portal.setFreeTransfers(true);
 
-        createBOOKwdaiLiquidity(totalDAI);
+        createJBTwdaiLiquidity(totalDAI);
         createDAILiquidity(totalDAI);
         preBuyForGroup(totalDAI);
 
@@ -325,33 +325,33 @@ contract SBGE {
         (,,totalDAIwdai) = uniswapV2Router.addLiquidity(address(wdai), address(dai), wdai.balanceOf(address(this)), wdai.balanceOf(address(this)), 0, 0, address(this), block.timestamp);
     }
 
-    function createBOOKwdaiLiquidity(uint256 totalDAI) internal{
-        // Create WDAI/BOOK Liquidity Pool 
+    function createJBTwdaiLiquidity(uint256 totalDAI) internal{
+        // Create WDAI/JBT Liquidity Pool 
         wdai.deposit(totalDAI.mul(poolPercent).div(10000));
 
-        (,,totalBOOKwdai) = uniswapV2Router.addLiquidity(address(wdai), address(BOOK), wdai.balanceOf(address(this)), BOOK.totalSupply(), 0, 0, address(this), block.timestamp);
-        book_lpToken = IERC20(uniswapV2Factory.getPair(address(wdai), address(BOOK)));
+        (,,totalJBTwdai) = uniswapV2Router.addLiquidity(address(wdai), address(JBT), wdai.balanceOf(address(this)), JBT.totalSupply(), 0, 0, address(this), block.timestamp);
+        lpToken = IERC20(uniswapV2Factory.getPair(address(wdai), address(JBT)));
     }
 
     function _claim(address _to, uint256 _contribution) internal {
         uint256 totalDAI = totalDAICollected;
 
-        // Send Book/wDAI liquidity tokens
-        uint256 share = _contribution.mul(totalBOOKwdai) / totalDAI;
-        if (share > book_lpToken.balanceOf(address(this))) {
-            share = book_lpToken.balanceOf(address(this));
+        // Send JBT/wDAI liquidity tokens
+        uint256 share = _contribution.mul(totalJBTwdai) / totalDAI;
+        if (share > lpToken.balanceOf(address(this))) {
+            share = lpToken.balanceOf(address(this));
         }
-        book_lpToken.transfer(_to, share);  
+        lpToken.transfer(_to, share);  
 
-        // Send BOOK
-        TransferPortal portal = TransferPortal(address(BOOK.transferPortal()));
+        // Send JBT
+        TransferPortal portal = TransferPortal(address(JBT.transferPortal()));
         portal.setFreeTransfers(true);
 
-        share = _contribution.mul(totalBOOKBought) / totalDAI;
-        if (share > BOOK.balanceOf(address(this))) {
-            share = BOOK.balanceOf(address(this));
+        share = _contribution.mul(totalJBTBought) / totalDAI;
+        if (share > JBT.balanceOf(address(this))) {
+            share = JBT.balanceOf(address(this));
         }
-        BOOK.transfer(_to, share);
+        JBT.transfer(_to, share);
 
         portal.setFreeTransfers(false);
     }

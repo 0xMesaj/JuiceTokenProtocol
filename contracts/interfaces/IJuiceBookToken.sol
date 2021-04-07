@@ -1,9 +1,12 @@
 pragma solidity ^0.7.0;
+import "./ITransferPortal.sol";
 
-interface IBookToken {
+
+interface IJuiceBookToken {
     event Transfer(address indexed _from, address indexed _to, uint256 _value);
     event Approval(address indexed _owner, address indexed _spender, uint256 _value);
 
+    function transferPortal() external view returns (ITransferPortal);
     function totalSupply() external view returns (uint256);
     function balanceOf(address _account) external view returns (uint256);
     function transfer(address _recipient, uint256 _amount) external returns (bool);

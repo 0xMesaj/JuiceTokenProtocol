@@ -6,13 +6,13 @@ import "./interfaces/IERC20.sol";
 import "./uniswap/IUniswapV2Pair.sol";
 import "./uniswap/IUniswapV2Router02.sol";
 import "./uniswap/IUniswapV2Factory.sol";
-import "./BookToken.sol";
+import "./interfaces/IJuiceBookToken.sol";
 import "./Address.sol";
 import "./SafeERC20.sol";
 import "./SafeMath.sol";
 
 //Scaled up by 100: 10000 = 100%
-struct BOOKTransferPortalParameters{
+struct JBTTransferPortalParameters{
     address dev;
     uint16 devRewardRate;
     uint16 vaultRewardRate;
@@ -38,10 +38,10 @@ contract TransferPortal is ITransferPortal{
         _;
     }
 
-    BOOKTransferPortalParameters public parameters;
+    JBTTransferPortalParameters public parameters;
     IUniswapV2Router02 immutable uniswapV2Router;
     IUniswapV2Factory immutable uniswapV2Factory;
-    BookToken immutable BOOK;
+    IJuiceBookToken immutable JBT;
 
     mapping (address => AddressState) public addressStates;
     IERC20[] public allowedPoolTokens;
@@ -52,9 +52,9 @@ contract TransferPortal is ITransferPortal{
     mapping (address => uint256) public liquiditySupply;
     address public mustUpdate;    
 
-    constructor(BookToken _BOOK, IUniswapV2Router02 _uniswapV2Router){
+    constructor(IJuiceBookToken _JBT, IUniswapV2Router02 _uniswapV2Router){
         mesaj = msg.sender;
-        BOOK = _BOOK;
+        JBT = _JBT;
         uniswapV2Router = _uniswapV2Router;
         uniswapV2Factory = IUniswapV2Factory(_uniswapV2Router.factory());
     }
@@ -78,7 +78,7 @@ contract TransferPortal is ITransferPortal{
         require (_dev != address(0) && _vault != address(0));
         require (_vaultRewardRate <= 500 && _devRate <= 10, "Sanity");
         
-        BOOKTransferPortalParameters memory _parameters;
+        JBTTransferPortalParameters memory _parameters;
         _parameters.dev = _dev;
         _parameters.vaultRewardRate = _vaultRewardRate;
         _parameters.devRewardRate = _devRate;
@@ -87,9 +87,9 @@ contract TransferPortal is ITransferPortal{
     }
 
     function allowPool(IERC20 token) public mesajOnly(){
-        address pool = uniswapV2Factory.getPair(address(BOOK), address(token));
+        address pool = uniswapV2Factory.getPair(address(JBT), address(token));
         if (pool == address(0)) {
-            pool = uniswapV2Factory.createPair(address(BOOK), address(token));
+            pool = uniswapV2Factory.createPair(address(JBT), address(token));
         }
         AddressState state = addressStates[pool];
         require (state != AddressState.AllowedPool, "Already allowed");
@@ -98,26 +98,26 @@ contract TransferPortal is ITransferPortal{
         liquiditySupply[pool] = IERC20(pool).totalSupply();
     }
 
-    function safeAddLiquidity(IERC20 token, uint256 tokenAmount, uint256 bookAmount, uint256 minTokenAmount, uint256 minBookAmount, address to, uint256 deadline) public
-    returns (uint256 bookUsed, uint256 tokenUsed, uint256 liquidity){
+    function safeAddLiquidity(IERC20 token, uint256 tokenAmount, uint256 JBTAmount, uint256 minTokenAmount, uint256 minJBTAmount, address to, uint256 deadline) public
+    returns (uint256 JBTUsed, uint256 tokenUsed, uint256 liquidity){
 
-        address pool = uniswapV2Factory.getPair(address(BOOK), address(token));
+        address pool = uniswapV2Factory.getPair(address(JBT), address(token));
         require (pool != address(0) && addressStates[pool] == AddressState.AllowedPool, "Pool not approved");
         unrestricted = true;
 
         uint256 tokenBalance = token.balanceOf(address(this));
         token.safeTransferFrom(msg.sender, address(this), tokenAmount);
-        BOOK.transferFrom(msg.sender, address(this), bookAmount);
-        BOOK.approve(address(uniswapV2Router), bookAmount);
+        JBT.transferFrom(msg.sender, address(this), JBTAmount);
+        JBT.approve(address(uniswapV2Router), JBTAmount);
         token.safeApprove(address(uniswapV2Router), tokenAmount);
-        (bookUsed, tokenUsed, liquidity) = uniswapV2Router.addLiquidity(address(BOOK), address(token), bookAmount, tokenAmount, minBookAmount, minTokenAmount, to, deadline);
+        (JBTUsed, tokenUsed, liquidity) = uniswapV2Router.addLiquidity(address(JBT), address(token), JBTAmount, tokenAmount, minJBTAmount, minTokenAmount, to, deadline);
         liquiditySupply[pool] = IERC20(pool).totalSupply();
         if (mustUpdate == pool) {
             mustUpdate = address(0);
         }
 
-        if (bookUsed < bookAmount) {
-            BOOK.transfer(msg.sender, bookAmount - bookUsed);
+        if (JBTUsed < JBTAmount) {
+            JBT.transfer(msg.sender, JBTAmount - JBTUsed);
         }
         tokenBalance = token.balanceOf(address(this)).sub(tokenBalance);
         if (tokenBalance > 0) {
@@ -155,7 +155,8 @@ contract TransferPortal is ITransferPortal{
         if (unrestricted || taxation[from]) {
             return new TransferPortalTarget[](0);
         }
-        BOOKTransferPortalParameters memory params = parameters;
+
+        JBTTransferPortalParameters memory params = parameters;
 
         targets = new TransferPortalTarget[]((params.devRewardRate > 0 ? 1 : 0) + (params.vaultRewardRate > 0 ? 1 : 0));
         uint256 index = 0;
@@ -205,12 +206,12 @@ contract TransferPortal is ITransferPortal{
                 // certainty that we're interacting with a uniswap pair
                 try IUniswapV2Pair(a).token0() returns (address token0)
                 {
-                    if (token0 == address(BOOK)) {
+                    if (token0 == address(JBT)) {
                         revert("22");
                     }
                     try IUniswapV2Pair(a).token1() returns (address token1)
                     {
-                        if (token1 == address(BOOK)) {
+                        if (token1 == address(JBT)) {
                             revert("22");
                         }                        
                     }

@@ -7,7 +7,7 @@ import "./SafeERC20.sol";
 import "./ERC20.sol";
 import "./interfaces/ILockedLiqCalculator.sol";
 import "./interfaces/IERC20.sol";
-import "./interfaces/IBookVault.sol";
+import "./interfaces/IJuiceBookVault.sol";
 import "./uniswap/IUniswapV2Factory.sol";
 import "./SafeMath.sol";
 
@@ -33,8 +33,8 @@ contract WDAI is ERC20{
     IUniswapV2Factory factory;
     ILockedLiqCalculator public lockedLiqCalculator;
     address mesaj;
-    IERC20 BOOK;
-    IBookVault vault;
+    IERC20 JBT;
+    IJuiceBookVault vault;
 
     struct Proposal {
         uint id;
@@ -75,21 +75,21 @@ contract WDAI is ERC20{
         _;
     }
 
-    constructor ( IBookVault _vault,IERC20 _BOOK, IERC20 _wrappedToken, address _treasury, IUniswapV2Factory _factory, string memory _name, string memory _symbol) ERC20 (_name, _symbol) {
+    constructor ( IJuiceBookVault _vault,IERC20 _JBT, IERC20 _wrappedToken, address _treasury, IUniswapV2Factory _factory, string memory _name, string memory _symbol) ERC20 (_name, _symbol) {
         wrappedToken = _wrappedToken;
         treasury[_treasury] = true;
         quaestor[_treasury] = true;
         quaestor[msg.sender] = true;
 
         vault = _vault;
-        BOOK = _BOOK;
+        JBT = _JBT;
         mesaj = msg.sender;
     }
 
     /* Set the address for initial lockedLiqCalculator, cannot be recalled after first execution -
        Only way to change lockedLiqCalculator is through governance proposals */
     function setLiquidityCalculator(ILockedLiqCalculator _lockedLiqCalculator) external mesajOnly(){
-        require(lockedLiqCalculator == 0x0, "Function no longer callable after first execution");
+        require(address(lockedLiqCalculator) == address(0x0), "Function no longer callable after first execution");
         lockedLiqCalculator = _lockedLiqCalculator;
     }
 
@@ -113,7 +113,7 @@ contract WDAI is ERC20{
         require (quaestor[msg.sender], "Error: Quaestors only");
         
         uint256 fundAmount = lockedLiqCalculator.calculateLockedwDAI(wrappedToken, address(this));
-        IBookVault(to).initializeTreasury(fundAmount);
+        IJuiceBookVault(to).initializeTreasury(fundAmount);
         if (fundAmount > 0) {
             wrappedToken.transferFrom(address(this),to, fundAmount);
         }
@@ -192,7 +192,7 @@ contract WDAI is ERC20{
         Proposal storage proposal = proposals[proposalId];
         Receipt storage receipt = proposal.receipts[voter];
         require(receipt.hasVoted == false, "_castVote: voter already voted");
-        uint256 votes = BOOK.balanceOf(voter);
+        uint256 votes = JBT.balanceOf(voter);
 
         if (support) {
             proposal.forVotes = votes.add(proposal.forVotes);
@@ -207,16 +207,16 @@ contract WDAI is ERC20{
         emit VoteCast(voter, proposalId, support, votes);
     }
 
-    // Min Required Votes to Reject is 51% of the Circulating Book Token
-    // Subtract the BOOK within the LPs
+    // Min Required Votes to Reject is 51% of the Circulating JBT Token
+    // Subtract the JBT within the LPs
     function getMinRequiredVotes() internal view returns(uint256 amt){
         uint256 poolNum = vault.poolInfoCount();
-        uint256 pooledBookCount = 0;
+        uint256 pooledJBTCount = 0;
         for(uint i=0;i<poolNum;i++){
-            pooledBookCount = pooledBookCount.add(vault.getPooledBook(i));
+            pooledJBTCount = pooledJBTCount.add(vault.getPooledJBT(i));
         }
-        uint bookSupply = BOOK.totalSupply();
-        amt = bookSupply.sub(pooledBookCount).mul(51).div(100);
+        uint JBTSupply = JBT.totalSupply();
+        amt = JBTSupply.sub(pooledJBTCount).mul(51).div(100);
     }
 
     function judgeProposal(uint proposalID) public {

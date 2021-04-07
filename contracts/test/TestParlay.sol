@@ -75,9 +75,6 @@ contract TestParlay{
             }
             s = s.toSlice().concat(int2str(_rules[i]).toSlice()); // "abcdef"
         }
-
-        console.log(s);
-
     }
 
        function resolveParlay( bytes32 _betID ) public {
@@ -108,10 +105,8 @@ contract TestParlay{
             uint256 amt = p.amount;
             address creator = p.creator;
         
-            console.log(odds);
             delete parlays[_betID];
             uint256 winAmt = amt.mul(odds).div(100);
-            console.log(winAmt);
   
         }
     }

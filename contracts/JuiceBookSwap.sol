@@ -11,60 +11,60 @@ import './SafeMath.sol';
 
 /*
 
- Convenience contract for Book Token Protocol. Allows for purchase of Book Token without wDAI, and sale of Book Token directly to other token
+ Convenience contract for JBT Protocol. Allows for purchase of  JBT without wDAI, and sale of JBT directly to other token
  in single tx...
- - Buys first convert purchasing token to DAI, then wrap to wDAI and purchase Book, 
- - Book sales will sell Book for wDAI then unwrap wDAI to DAI
+ - Buys first convert purchasing token to DAI, then wrap to wDAI and purchase JBT, 
+ - Sells first will sell JBT for wDAI then unwrap wDAI to DAI
 
 */
 
-contract BookSwap {
+contract JuiceBookSwap {
     using SafeMath for uint256;
-    IERC20 book;
+    IERC20 JBT;
     IWDAI wdai;
     IERC20 dai;
     IUniswapV2Router02 immutable router;
     IUniswapV2Factory immutable factory;
     address immutable pair;
     
-    constructor( IERC20 _book, IWDAI _wdai, IUniswapV2Router02 _uniswapV2Router) {
-        book = _book;
+    constructor( IERC20 _JBT, IWDAI _wdai, IUniswapV2Router02 _uniswapV2Router) {
+        JBT = _JBT;
         wdai = _wdai;
         dai = wdai.wrappedToken();
         router = _uniswapV2Router;
         factory = IUniswapV2Factory(_uniswapV2Router.factory());
-        pair = IUniswapV2Factory(_uniswapV2Router.factory()).getPair(address(book), address(wdai));
+        pair = IUniswapV2Factory(_uniswapV2Router.factory()).getPair(address(JBT), address(wdai));
+
         wdai.approve(address(_uniswapV2Router),uint(-1));
         dai.approve(address(wdai),uint(-1));
         wdai.approve(address(wdai),uint(-1));
-        
     }
 
-    function buyBookwithDAI(uint256 amt) public {
+    function buyJBTwithDAI(uint256 amt) public {
         uint256 pre_wdaiBalance = wdai.balanceOf(address(this));
         dai.transferFrom(msg.sender, address(this), amt);
         wdai.deposit(amt);
         uint256 post_wdaiBalance = wdai.balanceOf(address(this));
         require(post_wdaiBalance == (amt.add(pre_wdaiBalance)), "Error: Wrap");
 
-        uint256 pre_bookBalance = book.balanceOf(address(this));
+        uint256 pre_JBTBalance = JBT.balanceOf(address(this));
         address[] memory path = new address[](2);
         path[0] = address(wdai);
-        path[1] = address(book);
+        path[1] = address(JBT);
         router.swapExactTokensForTokensSupportingFeeOnTransferTokens(amt, 0, path, address(this), block.timestamp);
-        uint256 post_bookBalance = book.balanceOf(address(this));
-        require(post_bookBalance > pre_bookBalance, "Error: Swap");
-        uint256 bookAmt = post_bookBalance.sub(pre_bookBalance);
-        book.transfer(msg.sender, bookAmt);
+        uint256 post_JBTBalance = JBT.balanceOf(address(this));
+        require(post_JBTBalance > pre_JBTBalance, "Error: Swap");
+        uint256 JBTAmt = post_JBTBalance.sub(pre_JBTBalance);
+        JBT.transfer(msg.sender, JBTAmt);
     }
 
-    function sellBookforDAI(uint256 amt) public {
-        book.transferFrom(msg.sender, address(this), amt);
+    function sellJBTforDAI(uint256 amt) public {
+        JBT.transferFrom(msg.sender, address(this), amt);
         address[] memory path = new address[](2);
-        path[0] = address(book);
+        path[0] = address(JBT);
         path[1] = address(wdai);
-        book.approve(address(router),uint(-1));
-        uint256 sellAmt = book.balanceOf(address(this));
+        JBT.approve(address(router),uint(-1));
+        uint256 sellAmt = JBT.balanceOf(address(this));
 
         uint256 pre_wdaiBalance = wdai.balanceOf(address(this));
         router.swapExactTokensForTokensSupportingFeeOnTransferTokens(sellAmt, 0, path, address(this), block.timestamp);

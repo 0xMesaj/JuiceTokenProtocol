@@ -47,7 +47,7 @@ describe('Book Protocol Sim', () => {
 
         await BookTreasury.connect(owner).setWDAI(wDAI.address);
         
-        await BOOKtoken.connect(owner).setBookVault(BookVault.address);
+        await BOOKtoken.connect(owner).setJBTVault(BookVault.address);
         // await SportsBook.connect(mesaj).setTreasury(BookTreasury.address);
         
         const sbge = await SBGEContractFactory.deploy(BOOKtoken.address, uniswap.router.address, wDAI.address, BookTreasury.address, weth.address);
@@ -81,17 +81,17 @@ describe('Book Protocol Sim', () => {
         //Transfer Total BOOK Supply to SBGE
         await BOOKtoken.connect(owner).transfer(sbge.address, utils.parseEther("28000000"));
 
-        await sbge.connect(owner).setupBOOKwdai();
+        await sbge.connect(owner).setupJBTwdai();
         const BOOKwdai = uniswap.pairFor(await uniswap.factory.getPair(wDAI.address, BOOKtoken.address));
 
         await portal.connect(owner).allowPool(wDAI.address);
         await portal.connect(owner).setController(sbge.address, true);
 
-        //activate SBGE
+        // Activate SBGE
         await uniswap.wbtc.approve(sbge.address, constants.MaxUint256, { from: owner.address });
         await sbge.connect(owner).activate();
         
-        // Consent is sexy
+        // Approvals
         await DAItoken.connect(owner).approve(BookSwap.address,constants.MaxUint256);
         await BOOKtoken.connect(owner).approve(BookSwap.address,constants.MaxUint256);
         await DAItoken.connect(aThree).approve(sbge.address,constants.MaxUint256);
