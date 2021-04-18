@@ -159,8 +159,8 @@ contract SBGE {
             address token1 = IUniswapV2Pair(_token).token1();
 
             bool isUniLP = IUniswapV2Factory(uniswapV2Factory).getPair(token0,token1) !=  address(0);
-            // bool isSushiLP = IUniswapV2Factory(sushiswapFactory).getPair(token0,token1) !=  address(0);
-            bool isSushiLP = false;
+            bool isSushiLP = IUniswapV2Factory(sushiswapFactory).getPair(token0,token1) !=  address(0);
+            // bool isSushiLP = false;
 
             if(!isUniLP && !isSushiLP) { revert("SBGE Error: LP Token Not Supported"); } // reverts here
             TransferHelper.safeTransferFrom(_token, msg.sender, _token, _amount);
@@ -238,34 +238,50 @@ contract SBGE {
         }
     }
 
+    //Swap token to WETH then to DAI
     function sellTokenForDAI(address _token, uint256 _amount, bool _from) internal returns (uint256 daiAmount){
-        address pairWithDAI = IUniswapV2Factory(uniswapV2Factory).getPair(_token, address(dai));
-        require(pairWithDAI != address(0), "Unsellable Token Contributed. We no want your shitcoin");
+        address pairWithWETH = IUniswapV2Factory(uniswapV2Factory).getPair(_token, address(WETH));
+        require(pairWithWETH != address(0x0), "Unsellable Token Contributed. We no want your shitcoin");
         
         IERC20 token = IERC20(_token);
-        IUniswapV2Pair pair = IUniswapV2Pair(pairWithDAI); 
+        IUniswapV2Pair pair = IUniswapV2Pair(pairWithWETH); 
 
-        uint256 tokenReservePresale = token.balanceOf(pairWithDAI);
+        uint256 tokenReservePresale = token.balanceOf(pairWithWETH);
 
         if(_from) {
-            TransferHelper.safeTransferFrom(_token, msg.sender, pairWithDAI, _amount);
+            TransferHelper.safeTransferFrom(_token, msg.sender, pairWithWETH, _amount);
         } else {
-            TransferHelper.safeTransfer(_token, pairWithDAI, _amount);
+            TransferHelper.safeTransfer(_token, pairWithWETH, _amount);
         }
-        uint256 tokenReservePostsale = token.balanceOf(pairWithDAI);
+        uint256 tokenReservePostsale = token.balanceOf(pairWithWETH);
         (uint256 reserve0, uint256 reserve1, ) = pair.getReserves();
 
+        uint256 preWETHBalance = WETH.balanceOf(address(this));
+
         uint256 delta = tokenReservePostsale.sub(tokenReservePresale, "Subtraction is hard");
-        if(pair.token0() == _token) {                  
-            daiAmount = getAmountOut(delta, reserve0, reserve1);
-            require(daiAmount < reserve1.mul(30).div(100), "Too much slippage in selling");
-            pair.swap(0, daiAmount, address(this), "");
+        uint256 wethAMT;
+        if(pair.token0() == _token) {              
+            wethAMT = getAmountOut(delta, reserve0, reserve1);
+            require(wethAMT < reserve1.mul(30).div(100), "Too much slippage in selling");
+            pair.swap(0, wethAMT, address(this), "");
         } else {
-            daiAmount = getAmountOut(delta, reserve1, reserve0);
+            wethAMT = getAmountOut(delta, reserve1, reserve0);
             
-            require(daiAmount < reserve0.mul(30).div(100), "Too much slippage in selling");
-            pair.swap(daiAmount, 0, address(this), "");
+            require(wethAMT < reserve0.mul(30).div(100), "Too much slippage in selling");
+            pair.swap(wethAMT, 0, address(this), "");
         }
+        uint256 postWETHBalance = WETH.balanceOf(address(this));
+        uint256 WETHamt = preWETHBalance.sub(postWETHBalance);
+
+        //SWAP WETH to DAI
+        uint256 preDAIBalance = dai.balanceOf(address(this));
+        address[] memory path = new address[](2);
+        path[0] = address(WETH);
+        path[1] = address(dai);
+        uniswapV2Router.swapExactTokensForTokensSupportingFeeOnTransferTokens(WETHamt, 0, path, address(this), block.timestamp);
+        uint256 postDAIBalance = dai.balanceOf(address(this));
+        require(postDAIBalance > preDAIBalance, "Error: Swap");
+        daiAmount = postDAIBalance.sub(preDAIBalance);
     }
     
     function getAmountOut(uint256 amountIn, uint256 reserveIn, uint256 reserveOut) internal pure returns (uint256 amountOut) {
@@ -301,7 +317,7 @@ contract SBGE {
         require (!distributionComplete, "Distribution complete");
         uint256 totalDAI = totalDAIContribution;
         
-        require (totalDAI > 0, "Sad Mesaj");
+        require (totalDAI > 0, "No Liquidity Generated");
         distributionComplete = true;
         totalDAICollected = totalDAI;
 

@@ -1,7 +1,7 @@
 pragma solidity ^0.7.0;
 
 import "./interfaces/ILockedLiqCalculator.sol";
-import "./JuiceBookToken.sol";
+import "./JuiceToken.sol";
 import "./SafeMath.sol";
 import "./uniswap/libraries/UniswapV2Library.sol";
 import "./uniswap/IUniswapV2Factory.sol";
@@ -10,24 +10,24 @@ import './interfaces/IERC20.sol';
 contract LockedLiqCalculator is ILockedLiqCalculator{
     using SafeMath for uint256;
 
-    JuiceBookToken immutable JBT;
+    JuiceToken immutable JCE;
     IUniswapV2Factory immutable uniswapV2Factory;
 
-    constructor(JuiceBookToken _JBT, IUniswapV2Factory _uniswapV2Factory){
-        JBT = _JBT;
+    constructor(JuiceToken _JCE, IUniswapV2Factory _uniswapV2Factory){
+        JCE = _JCE;
         uniswapV2Factory = _uniswapV2Factory;
     }
 
     function calculateLockedwDAI(IERC20 wrappedToken, address backingToken) public override view returns (uint256){
-        address pair = UniswapV2Library.pairFor(address(uniswapV2Factory), address(JBT), backingToken);
-        uint256 freeJBT = JBT.totalSupply().sub(JBT.balanceOf(pair));
+        address pair = UniswapV2Library.pairFor(address(uniswapV2Factory), address(JCE), backingToken);
+        uint256 freeJCE = JCE.totalSupply().sub(JCE.balanceOf(pair));
 
         uint256 sellAllProceeds = 0;
-        if (freeJBT > 0) {
+        if (freeJCE > 0) {
             address[] memory path = new address[](2);
-            path[0] = address(JBT);
+            path[0] = address(JCE);
             path[1] = backingToken;
-            uint256[] memory amountsOut = UniswapV2Library.getAmountsOut(address(uniswapV2Factory), freeJBT, path);
+            uint256[] memory amountsOut = UniswapV2Library.getAmountsOut(address(uniswapV2Factory), freeJCE, path);
             sellAllProceeds = amountsOut[1];
         }
        
@@ -45,15 +45,15 @@ contract LockedLiqCalculator is ILockedLiqCalculator{
     }
 
     function simulateSell(IERC20 wrappedToken, address backingToken) public override view returns (uint256){
-        address pair = UniswapV2Library.pairFor(address(uniswapV2Factory), address(JBT), backingToken);
-        uint256 freeJBT = JBT.totalSupply().sub(JBT.balanceOf(pair));
+        address pair = UniswapV2Library.pairFor(address(uniswapV2Factory), address(JCE), backingToken);
+        uint256 freeJCE = JCE.totalSupply().sub(JCE.balanceOf(pair));
 
         uint256 sellAllProceeds = 0;
-        if (freeJBT > 0) {
+        if (freeJCE > 0) {
             address[] memory path = new address[](2);
-            path[0] = address(JBT);
+            path[0] = address(JCE);
             path[1] = backingToken;
-            uint256[] memory amountsOut = UniswapV2Library.getAmountsOut(address(uniswapV2Factory), freeJBT, path);
+            uint256[] memory amountsOut = UniswapV2Library.getAmountsOut(address(uniswapV2Factory), freeJCE, path);
             sellAllProceeds = amountsOut[1];
         }
        

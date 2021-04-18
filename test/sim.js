@@ -12,7 +12,7 @@ describe('Book Protocol Sim', () => {
         pair = uniswap.pairFor(await uniswap.factory.getPair(uniswap.wbtc.address, weth.address))
         DAI = await ethers.getContractFactory('Dai');
         wDAIContract = await ethers.getContractFactory('WDAI');
-        BOOK = await ethers.getContractFactory('BookToken');
+        JUICE = await ethers.getContractFactory('JuiceToken');
         TransferPortalFactory = await ethers.getContractFactory('TransferPortal');    
         BookLiqCalculatorFactory = await ethers.getContractFactory("LockedLiqCalculator");  
         SBGEContractFactory = await ethers.getContractFactory('SBGE'); 
@@ -34,23 +34,23 @@ describe('Book Protocol Sim', () => {
 
     it('Sim', async () => {
         //Deploy
-        const BOOKtoken = await BOOK.deploy("BOOK","BOOK");
-        const BookVault = await BookVaultFactory.deploy(BOOKtoken.address);
-        const portal = await TransferPortalFactory.deploy(BOOKtoken.address,uniswap.router.address);
+        const JUICEtoken = await JUICE.deploy("JuiceToken","JCE");
+        const BookVault = await BookVaultFactory.deploy(JUICEtoken.address);
+        const portal = await TransferPortalFactory.deploy(JUICEtoken.address,uniswap.router.address);
         const DAItoken = await uniswap.dai;     
-        const BookLiqCalculator = await BookLiqCalculatorFactory.deploy(BOOKtoken.address, uniswap.factory.address);
-        await BOOKtoken.setTransferPortal(portal.address);
+        const BookLiqCalculator = await BookLiqCalculatorFactory.deploy(JUICEtoken.address, uniswap.factory.address);
+        await JUICEtoken.setTransferPortal(portal.address);
         const SportsBook = await SportsBookFactory.deploy(DAItoken.address); 
-        const BookTreasury = await BookTreasuryFactory.deploy(BookVault.address, SportsBook.address, DAItoken.address, BOOKtoken.address, BookLiqCalculator.address, uniswap.factory.address, uniswap.router.address)
-        const wDAI = await wDAIContract.deploy(BookVault.address, BOOKtoken.address, DAItoken.address, BookTreasury.address, uniswap.factory.address, "wDAI", "wDAI");
-        const BookSwap = await BookSwapFactory.deploy(BOOKtoken.address,wDAI.address,uniswap.router.address)
+        const BookTreasury = await BookTreasuryFactory.deploy(BookVault.address, SportsBook.address, DAItoken.address, JUICEtoken.address, BookLiqCalculator.address, uniswap.factory.address, uniswap.router.address)
+        const wDAI = await wDAIContract.deploy(BookVault.address, JUICEtoken.address, DAItoken.address, BookTreasury.address, uniswap.factory.address, "wDAI", "wDAI");
+        const BookSwap = await BookSwapFactory.deploy(JUICEtoken.address,wDAI.address,uniswap.router.address)
 
         await BookTreasury.connect(owner).setWDAI(wDAI.address);
         
-        await BOOKtoken.connect(owner).setJBTVault(BookVault.address);
+        await JUICEtoken.connect(owner).setJCEVault(BookVault.address);
         // await SportsBook.connect(mesaj).setTreasury(BookTreasury.address);
         
-        const sbge = await SBGEContractFactory.deploy(BOOKtoken.address, uniswap.router.address, wDAI.address, BookTreasury.address, weth.address);
+        const sbge = await SBGEContractFactory.deploy(JUICEtoken.address, uniswap.router.address, wDAI.address, BookTreasury.address, weth.address);
 
         await wDAI.connect(owner).designateTreasury(sbge.address,true);
         //Promote owner and SBGE to Queastor of wDAI contract
@@ -79,10 +79,10 @@ describe('Book Protocol Sim', () => {
         await uniswap.router.connect(lpMan).addLiquidity(weth.address,uniswap.wbtc.address,wethBal,wbtcBal,0,0,lpMan.address,2e9)
 
         //Transfer Total BOOK Supply to SBGE
-        await BOOKtoken.connect(owner).transfer(sbge.address, utils.parseEther("28000000"));
+        await JUICEtoken.connect(owner).transfer(sbge.address, utils.parseEther("28000000"));
 
         await sbge.connect(owner).setupJBTwdai();
-        const BOOKwdai = uniswap.pairFor(await uniswap.factory.getPair(wDAI.address, BOOKtoken.address));
+        const BOOKwdai = uniswap.pairFor(await uniswap.factory.getPair(wDAI.address, JUICEtoken.address));
 
         await portal.connect(owner).allowPool(wDAI.address);
         await portal.connect(owner).setController(sbge.address, true);
@@ -93,11 +93,11 @@ describe('Book Protocol Sim', () => {
         
         // Approvals
         await DAItoken.connect(owner).approve(BookSwap.address,constants.MaxUint256);
-        await BOOKtoken.connect(owner).approve(BookSwap.address,constants.MaxUint256);
+        await JUICEtoken.connect(owner).approve(BookSwap.address,constants.MaxUint256);
         await DAItoken.connect(aThree).approve(sbge.address,constants.MaxUint256);
         await DAItoken.connect(aThree).approve(wDAI.address,constants.MaxUint256);
         await wDAI.connect(aThree).approve(portal.address,constants.MaxUint256);
-        await BOOKtoken.connect(aThree).approve(portal.address,constants.MaxUint256);
+        await JUICEtoken.connect(aThree).approve(portal.address,constants.MaxUint256);
         await DAItoken.connect(aFour).approve(sbge.address,constants.MaxUint256);
         await DAItoken.connect(aFive).approve(sbge.address,constants.MaxUint256);
         await uniswap.wbtc.connect(mesaj).approve(sbge.address,constants.MaxUint256);
@@ -107,7 +107,7 @@ describe('Book Protocol Sim', () => {
         await BOOKwdai.connect(aFive).approve(BookVault.address,constants.MaxUint256);
         await BOOKwdai.connect(mesaj).approve(BookVault.address,constants.MaxUint256);
         await WETHWBTC.connect(lpMan).approve(sbge.address,constants.MaxUint256);
-        await BOOKtoken.connect(aTwo).approve(uniswap.router.address, constants.MaxUint256);
+        await JUICEtoken.connect(aTwo).approve(uniswap.router.address, constants.MaxUint256);
         await DAItoken.connect(aTwo).approve(wDAI.address,constants.MaxUint256);
         await wDAI.connect(aTwo).approve(uniswap.router.address, constants.MaxUint256);
         await BOOKwdai.connect(aThree).approve(uniswap.router.address, constants.MaxUint256);
@@ -141,18 +141,18 @@ describe('Book Protocol Sim', () => {
         await sbge.connect(owner).complete();
 
         //Init Book Transfer Portal
-        await BOOKtoken.setTransferPortal(portal.address);
+        await JUICEtoken.setTransferPortal(portal.address);
         await portal.connect(owner).setParameters(owner.address, BookVault.address, 100, 10);
 
         //Buy BOOK with wDAI
-        await uniswap.router.connect(aTwo).swapExactTokensForTokensSupportingFeeOnTransferTokens(utils.parseEther("10000"), 0, [wDAI.address, BOOKtoken.address], aTwo.address, 2e9);
-        await uniswap.router.connect(aTwo).swapExactTokensForTokensSupportingFeeOnTransferTokens(utils.parseEther("10000"), 0, [wDAI.address, BOOKtoken.address], aTwo.address, 2e9);
+        await uniswap.router.connect(aTwo).swapExactTokensForTokensSupportingFeeOnTransferTokens(utils.parseEther("10000"), 0, [wDAI.address, JUICEtoken.address], aTwo.address, 2e9);
+        await uniswap.router.connect(aTwo).swapExactTokensForTokensSupportingFeeOnTransferTokens(utils.parseEther("10000"), 0, [wDAI.address, JUICEtoken.address], aTwo.address, 2e9);
         //aTwo sells BOOK for wDAI
-        await uniswap.router.connect(aTwo).swapExactTokensForTokensSupportingFeeOnTransferTokens(await BOOKtoken.balanceOf(aTwo.address), 0, [BOOKtoken.address,wDAI.address], aTwo.address, 2e9);
+        await uniswap.router.connect(aTwo).swapExactTokensForTokensSupportingFeeOnTransferTokens(await JUICEtoken.balanceOf(aTwo.address), 0, [JUICEtoken.address,wDAI.address], aTwo.address, 2e9);
         
         //Buy 10k wDAI worth of BOOK and then send it to aFive
-        await uniswap.router.connect(aTwo).swapExactTokensForTokensSupportingFeeOnTransferTokens(utils.parseEther("10000"), 0, [wDAI.address, BOOKtoken.address], aTwo.address, 2e9);
-        await BOOKtoken.connect(aTwo).transfer(aFive.address, await BOOKtoken.balanceOf(aTwo.address))
+        await uniswap.router.connect(aTwo).swapExactTokensForTokensSupportingFeeOnTransferTokens(utils.parseEther("10000"), 0, [wDAI.address, JUICEtoken.address], aTwo.address, 2e9);
+        await JUICEtoken.connect(aTwo).transfer(aFive.address, await JUICEtoken.balanceOf(aTwo.address))
 
         //SBGE Contributors claim LP tokens and BOOK
         await sbge.connect(aThree).claim();
@@ -170,7 +170,7 @@ describe('Book Protocol Sim', () => {
         const aThreeStakeAmt = await BOOKwdai.balanceOf(aThree.address);
 
         // console.log("removing liq")
-        // expect(await uniswap.router.connect(aThree).removeLiquidity(BOOKtoken.address,wDAI.address,aThreeStakeAmt,0,0,aThree.address,2e9)).to.revert.with("UniswapV2: TRASNFER_FAILED")
+        // expect(await uniswap.router.connect(aThree).removeLiquidity(JUICEtoken.address,wDAI.address,aThreeStakeAmt,0,0,aThree.address,2e9)).to.revert.with("UniswapV2: TRASNFER_FAILED")
 
         await BookVault.connect(aThree).deposit(0,aThreeStakeAmt)
         await BookVault.connect(aFour).deposit(0,await BOOKwdai.balanceOf(aFour.address))
@@ -183,8 +183,8 @@ describe('Book Protocol Sim', () => {
         console.log("Final Treasury DAI Token Balance="+(final/10e17))
 
         //Buy BOOK from LP with wDAI and transfer it
-        await uniswap.router.connect(aTwo).swapExactTokensForTokensSupportingFeeOnTransferTokens(utils.parseEther("10000"), 0, [wDAI.address, BOOKtoken.address], aTwo.address, 2e9);
-        await BOOKtoken.connect(aTwo).transfer(aFive.address, await BOOKtoken.balanceOf(aTwo.address))
+        await uniswap.router.connect(aTwo).swapExactTokensForTokensSupportingFeeOnTransferTokens(utils.parseEther("10000"), 0, [wDAI.address, JUICEtoken.address], aTwo.address, 2e9);
+        await JUICEtoken.connect(aTwo).transfer(aFive.address, await JUICEtoken.balanceOf(aTwo.address))
 
 
         //Test Book Swap
@@ -198,10 +198,10 @@ describe('Book Protocol Sim', () => {
   
 
         // aThree Withdraws from Vault - Should receive Book Token Reward
-        const pre = await BOOKtoken.balanceOf(aThree.address);
+        const pre = await JUICEtoken.balanceOf(aThree.address);
         // console.log("pre="+pre)
         await BookVault.connect(aThree).withdraw(0,aThreeStakeAmt); //should receive some BOOK reward when they withdraw
-        const post = await BOOKtoken.balanceOf(aThree.address);
+        const post = await JUICEtoken.balanceOf(aThree.address);
         // console.log("post="+post)
         expect(post).to.not.equal(pre);
 
@@ -213,7 +213,7 @@ describe('Book Protocol Sim', () => {
 
 
 
-        const BOOKbalance = await BOOKtoken.balanceOf(BOOKwdai.address)
+        const BOOKbalance = await JUICEtoken.balanceOf(BOOKwdai.address)
         // console.log("book="+BOOKbalance)
 
         const WDAIbalance = await wDAI.balanceOf(BOOKwdai.address)

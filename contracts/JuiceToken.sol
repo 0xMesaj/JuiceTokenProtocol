@@ -9,14 +9,14 @@ import "./interfaces/IJuiceBookVault.sol";
 import "./uniswap/IUniswapV2Factory.sol";
 
 /*
-    BOOK Token has a transfer portal that is changeable through on-chain governance
-    Total Initial Supply: 28 Million
+    Juice Token has a transfer portal that is changeable through on-chain governance
+    Initial Supply: 28 Million
 */
 
-contract JuiceBookToken is ERC20{
+contract JuiceToken is ERC20{
     using SafeMath for uint256;
 
-    string public constant contract_name = "JuiceBook";
+    string public constant contract_name = "JuiceToken";
     bytes32 public constant DOMAIN_TYPEHASH = keccak256("EIP712Domain(string name,uint256 chainId,address verifyingContract)");
     bytes32 public constant BALLOT_TYPEHASH = keccak256("Ballot(uint256 proposalId,bool support)");
 
@@ -28,11 +28,6 @@ contract JuiceBookToken is ERC20{
     ITransferPortal public transferPortal;
     IJuiceBookVault vault;
     uint public proposalCount;
-
-    modifier mesajOnly(){
-        require (msg.sender == mesaj, "Mesaj only");
-        _;
-    }
 
     struct Proposal {
         uint id;
@@ -72,6 +67,12 @@ contract JuiceBookToken is ERC20{
         require (treasurers[msg.sender], "Treasurers only");
         _;
     }
+    
+    modifier mesajOnly(){
+        require (msg.sender == mesaj, "Mesaj only");
+        _;
+    }
+
 
     constructor( string memory _name, string memory _symbol ) ERC20(_name,_symbol) {
         mesaj = msg.sender;
@@ -218,7 +219,7 @@ contract JuiceBookToken is ERC20{
         return chainId;
     }
 
-    function setJBTVault( IJuiceBookVault _vault ) external isTreasurer(){
+    function setJCEVault( IJuiceBookVault _vault ) external isTreasurer(){
         require( address(vault) == address(0x0), "Vault already set");
         vault = _vault;
     }

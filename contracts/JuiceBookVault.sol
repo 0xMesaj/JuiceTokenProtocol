@@ -27,10 +27,7 @@ contract JuiceBookVault{
 
     address mesaj;
 
-    modifier mesajOnly(){
-        require (msg.sender == mesaj, "Mesaj only");
-        _;
-    }
+  
 
     IERC20 public immutable rewardToken;
 
@@ -38,6 +35,13 @@ contract JuiceBookVault{
 
     mapping (uint256 => mapping (address => UserInfo)) public userInfo;
     mapping (IERC20 => bool) existingPools;
+    mapping(address => bool) public wards;
+    mapping(address => bytes32[]) public addressBets;
+
+    modifier isWard(){
+        require (wards[msg.sender], "Error: Wards only");
+        _;
+    }
 
     uint256 public totalAllocationPoints;
     uint256 constant maxPoolCount = 20;
@@ -47,7 +51,7 @@ contract JuiceBookVault{
     uint256 public emergencyRecoveryTimestamp;
 
     constructor(IERC20 _rewardToken){
-        mesaj = msg.sender;
+        wards[msg.sender] = true;
         rewardToken = _rewardToken;
     }
 
@@ -55,7 +59,7 @@ contract JuiceBookVault{
         return poolInfo.length;
     }
 
-    function addPool(uint256 _allocationPoints, IERC20 _token) public mesajOnly(){
+    function addPool(uint256 _allocationPoints, IERC20 _token) public isWard(){
         require (address(_token) != address(0) && _token != rewardToken && emergencyRecoveryTimestamp == 0);
         require (!existingPools[_token], "Pool exists");
         require (poolInfo.length < maxPoolCount, "Too many pools");
@@ -70,7 +74,7 @@ contract JuiceBookVault{
         }));
     }
 
-    function setPoolAllocationPoints(uint256 _poolId, uint256 _allocationPoints) public mesajOnly(){
+    function setPoolAllocationPoints(uint256 _poolId, uint256 _allocationPoints) public isWard(){
         require (emergencyRecoveryTimestamp == 0);
         massUpdatePools();
         totalAllocationPoints = totalAllocationPoints.sub(poolInfo[_poolId].allocationPoints).add(_allocationPoints);
@@ -176,10 +180,8 @@ contract JuiceBookVault{
         lastRewardBalance = rewardToken.balanceOf(address(this));
     }
 
-    function declareEmergency() public mesajOnly() {
-        // Funds will be recoverable 3 days after an emergency is declared
-        // By then, everyone should have withdrawn whatever they can
-        // Failing that (which is probably why there's an emergency) we can recover for them
+    function declareEmergency() public isWard() {
+        // 3 Day period of recoverable funds
         emergencyRecoveryTimestamp = block.timestamp + 60*60*24*3;
         emit Emergency();
     }

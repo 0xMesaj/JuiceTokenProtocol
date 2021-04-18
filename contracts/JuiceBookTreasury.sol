@@ -122,7 +122,7 @@ contract JuiceBookTreasury {
         DAI.approve(_strategy,_amount);
     }
 
-    function numberGoUp(uint _amt) external isTreasurer(){
+    function numberGoUp( uint _amt ) external isTreasurer(){
         uint256 check = DAI.balanceOf(address(this)).sub(_amt);
         require(check > MIN_REQUIREMENT, "Treasury below buying threshold");
         
