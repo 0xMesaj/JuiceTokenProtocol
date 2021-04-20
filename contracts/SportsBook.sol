@@ -109,7 +109,7 @@ contract SportsBook is ChainlinkClient  {
     bool allowWagers;
     bool public freeFee;
     IWETH weth;
-    // IUniswapV2Router02 immutable uniswapV2Router;
+    IUniswapV2Router02 immutable uniswapV2Router;
     address immutable treasury;
 
     constructor (IERC20 _DAI, IWETH _WETH, address _treasury, IUniswapV2Router02 _uniswapV2Router) public payable{ 
@@ -119,7 +119,7 @@ contract SportsBook is ChainlinkClient  {
         wards[mesaj] = true;
         treasury = _treasury;
         
-        // uniswapV2Router = _uniswapV2Router;
+        uniswapV2Router = _uniswapV2Router;
         allowWagers = false;
         freeFee = false;
         oracle = 0x4dfFCF075d9972F743A2812632142Be64CA8B0EE;        //CHANGE
@@ -151,7 +151,7 @@ contract SportsBook is ChainlinkClient  {
             address creator = b.creator;
 
             delete bets[_betID];
-            dai.transfer(creator, pushAmt);
+            dai.transferFrom(treasury,creator, pushAmt);
             emit BetPush(_betID);
         }
     }
@@ -187,7 +187,7 @@ contract SportsBook is ChainlinkClient  {
 
             delete parlays[_betID];
             uint256 winAmt = amt.mul(odds).div(100);
-            dai.transfer(creator, winAmt);
+            dai.transferFrom(treasury,creator, winAmt);
             emit BetPayout(_betID);
         }
     }
@@ -271,19 +271,18 @@ contract SportsBook is ChainlinkClient  {
         bytes32 _queryID = buildBet(_index, _selection, _rule);
         
         if(_queryID != 0x0){
-            dai.transferFrom(msg.sender,address(this),_wagerAmt);
+            dai.transferFrom(msg.sender, address(treasury), _wagerAmt);
+            Bet storage b = bets[_queryID];
+            b.creator = msg.sender;
+            b.index = _index;
+            b.amount = _wagerAmt;
+            b.selection = _selection;
+            b.rule = _rule;
+            b.timestamp = block.timestamp;
+            
+            addressBets[b.creator].push(_queryID);
+            emit BetRequested(_queryID, _betRef);
         }
-        
-        Bet storage b = bets[_queryID];
-        b.creator = msg.sender;
-        b.index = _index;
-        b.amount = _wagerAmt;
-        b.selection = _selection;
-        b.rule = _rule;
-        b.timestamp = block.timestamp;
-        
-        addressBets[b.creator].push(_queryID);
-        emit BetRequested(_queryID, _betRef);
     }
 
     function betParlay( bytes16 _betRef,uint _amount, string memory _indexes, string memory _selections,  int[] memory _rules, bool _payFeeWithLink ) public payable{
@@ -311,35 +310,34 @@ contract SportsBook is ChainlinkClient  {
         bytes32 _queryID = buildParlay(_indexes, _selections, _rules );
 
         if(_queryID != 0x0){
-            dai.transferFrom(msg.sender,address(this),_amount);
-        }
-        
-        strings.slice memory s = _indexes.toSlice();
-        strings.slice memory delim = ",".toSlice();
-        string[] memory indexes = new string[](s.count(delim) + 1);
+            dai.transferFrom(msg.sender, address(treasury), _wagerAmt);
+            strings.slice memory s = _indexes.toSlice();
+            strings.slice memory delim = ",".toSlice();
+            string[] memory indexes = new string[](s.count(delim) + 1);
 
-        require(indexes.length < 8, 'Parlay too large');
+            require(indexes.length < 8, 'Parlay too large');
 
-        for(uint i = 0; i < indexes.length; i++) {
-           indexes[i] = s.split(delim).toString();
-        }
+            for(uint i = 0; i < indexes.length; i++) {
+            indexes[i] = s.split(delim).toString();
+            }
+            
+            s =  _selections.toSlice();
+            string[] memory selections = new string[](s.count(delim) + 1);
+            for(uint i = 0; i < selections.length; i++) {
+                selections[i] = s.split(delim).toString();
+            }
+                
+            Parlay storage p = parlays[_queryID];
+            p.creator = msg.sender;
+            p.amount = _amount;
+            p.indexes = indexes;
+            p.selections = selections;
+            p.rules = _rules;
+            p.timestamp = block.timestamp;
         
-        s =  _selections.toSlice();
-        string[] memory selections = new string[](s.count(delim) + 1);
-        for(uint i = 0; i < selections.length; i++) {
-           selections[i] = s.split(delim).toString();
+            addressBets[p.creator].push(_queryID);
+            emit BetRequested(_queryID, _betRef);
         }
-             
-        Parlay storage p = parlays[_queryID];
-        p.creator = msg.sender;
-        p.amount = _amount;
-        p.indexes = indexes;
-        p.selections = selections;
-        p.rules = _rules;
-        p.timestamp = block.timestamp;
-    
-        addressBets[p.creator].push(_queryID);
-        emit BetRequested(_queryID, _betRef);
     }
 
     /*
@@ -403,7 +401,7 @@ contract SportsBook is ChainlinkClient  {
             if( int(home_score*10)+rule > int(away_score*10) ){
                 win = 1;
             }
-            else if( int(home_score*10) + rule == int(away_score*10) ){
+            else if( int(home_score*10)+rule == int(away_score*10) ){
                 win = 2;
             }
         }
@@ -498,7 +496,7 @@ contract SportsBook is ChainlinkClient  {
     } 
     
     /* Oracle-Only Fulfillers  */
-    function fulfillStatus(bytes32 _requestId, bool status) public isOracle() recordChainlinkFulfillment(_requestId){
+    function fulfillStatus(bytes32 _requestId, bool status) public isOracle() reco  rdChainlinkFulfillment(_requestId){
         uint256 index = queriedIDs[_requestId];
         if( status ){
             matchCancellationTimestamp[index] = block.timestamp;

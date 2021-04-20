@@ -198,7 +198,8 @@ contract SportsBook is ChainlinkClient  {
         uint256 amt = refund[msg.sender];
         require(amt > 0, "No refund to claim");
         refund[msg.sender] = 0;
-        dai.transferFrom(treasury,msg.sender,amt);
+        // dai.transferFrom(treasury,msg.sender,amt);
+        dai.transferFrom(address(this),msg.sender,amt);
     }
 
     /* 
@@ -213,7 +214,8 @@ contract SportsBook is ChainlinkClient  {
             uint256 amt = b.amount;
             address refundee = b.creator;
             delete bets[_betID];
-            dai.transferFrom(treasury,refundee,amt);
+            // dai.transferFrom(treasury,refundee,amt);
+            dai.transferFrom(address(this),refundee,amt);
             emit BetRejected(_betID);
         }
     }
@@ -237,7 +239,8 @@ contract SportsBook is ChainlinkClient  {
             uint256 amt = p.amount;
             address refundee = p.creator;
             delete bets[_betID];
-            dai.transferFrom(treasury,refundee,amt);
+            // dai.transferFrom(treasury,refundee,amt);
+            dai.transferFrom(address(this),refundee,amt);
             emit BetRejected(_betID);
         }
     }
@@ -248,18 +251,17 @@ contract SportsBook is ChainlinkClient  {
         
         if(_queryID != 0x0){
             dai.transferFrom(msg.sender,address(this),_wagerAmt);
+            Bet storage b = bets[_queryID];
+            b.creator = msg.sender;
+            b.index = _index;
+            b.amount = _wagerAmt;
+            b.selection = _selection;
+            b.rule = _rule;
+            b.timestamp = block.timestamp;
+            
+            addressBets[b.creator].push(_queryID);
+            emit BetRequested(_queryID, _betRef);
         }
-        
-        Bet storage b = bets[_queryID];
-        b.creator = msg.sender;
-        b.index = _index;
-        b.amount = _wagerAmt;
-        b.selection = _selection;
-        b.rule = _rule;
-        b.timestamp = block.timestamp;
-        
-        addressBets[b.creator].push(_queryID);
-        emit BetRequested(_queryID, _betRef);
     }
 
     function betParlay( bytes16 _betRef,uint _amount, string memory _indexes, string memory _selections,  int[] memory _rules ) public payable{
@@ -269,34 +271,33 @@ contract SportsBook is ChainlinkClient  {
 
         if(_queryID != 0x0){
             dai.transferFrom(msg.sender,address(this),_amount);
-        }
-        
-        strings.slice memory s = _indexes.toSlice();
-        strings.slice memory delim = ",".toSlice();
-        string[] memory indexes = new string[](s.count(delim) + 1);
+            strings.slice memory s = _indexes.toSlice();
+            strings.slice memory delim = ",".toSlice();
+            string[] memory indexes = new string[](s.count(delim) + 1);
 
-        require(indexes.length < 8, 'Parlay too large');
+            require(indexes.length < 8, 'Parlay too large');
 
-        for(uint i = 0; i < indexes.length; i++) {
-           indexes[i] = s.split(delim).toString();
-        }
+            for(uint i = 0; i < indexes.length; i++) {
+            indexes[i] = s.split(delim).toString();
+            }
+            
+            s =  _selections.toSlice();
+            string[] memory selections = new string[](s.count(delim) + 1);
+            for(uint i = 0; i < selections.length; i++) {
+            selections[i] = s.split(delim).toString();
+            }
+                
+            Parlay storage p = parlays[_queryID];
+            p.creator = msg.sender;
+            p.amount = _amount;
+            p.indexes = indexes;
+            p.selections = selections;
+            p.rules = _rules;
+            p.timestamp = block.timestamp;
         
-        s =  _selections.toSlice();
-        string[] memory selections = new string[](s.count(delim) + 1);
-        for(uint i = 0; i < selections.length; i++) {
-           selections[i] = s.split(delim).toString();
+            addressBets[p.creator].push(_queryID);
+            emit BetRequested(_queryID, _betRef);
         }
-             
-        Parlay storage p = parlays[_queryID];
-        p.creator = msg.sender;
-        p.amount = _amount;
-        p.indexes = indexes;
-        p.selections = selections;
-        p.rules = _rules;
-        p.timestamp = block.timestamp;
-    
-        addressBets[p.creator].push(_queryID);
-        emit BetRequested(_queryID, _betRef);
     }
 
     /*
@@ -312,7 +313,8 @@ contract SportsBook is ChainlinkClient  {
             uint256 amt = b.amount;
             address creator = b.creator;
             delete bets[_betID];
-            dai.transferFrom(treasury,creator,amt);
+            // dai.transferFrom(treasury,creator,amt);
+            dai.transferFrom(address(this),creator,amt);
         }else{
             Parlay memory p = parlays[_betID];
             for(uint i=0;i<p.indexes.length;i++){
@@ -321,7 +323,8 @@ contract SportsBook is ChainlinkClient  {
             uint256 amt = p.amount;
             address creator = p.creator;
             delete parlays[_betID];
-            dai.transferFrom(treasury,creator,amt);
+            // dai.transferFrom(treasury,creator,amt);
+            dai.transferFrom(address(this),creator,amt);
         }
     }
 
@@ -465,7 +468,8 @@ contract SportsBook is ChainlinkClient  {
 
     function fulfillParlayOdds(bytes32 _requestId, bytes32 _odds) public isOracle() recordChainlinkFulfillment(_requestId){
         Parlay storage p = parlays[_requestId];
-        MAX_BET = int(dai.allowance(treasury,address(this)).mul(5).div(1000));   // 0.5% risk tolerance
+        // MAX_BET = int(dai.allowance(treasury,address(this)).mul(5).div(1000));   // 0.5% risk tolerance
+        MAX_BET = int(dai.balanceOf(address(this)).mul(5).div(1000));
         
         strings.slice memory s = bytes32ToString(_odds).toSlice();
         strings.slice memory delim = ".".toSlice();
@@ -481,7 +485,8 @@ contract SportsBook is ChainlinkClient  {
     }
     
     function fulfillBetOdds(bytes32 _requestId, uint256 _odds) public isOracle() recordChainlinkFulfillment(_requestId){
-        MAX_BET = int(dai.allowance(treasury,address(this)).mul(5).div(1000));   // 0.5% risk tolerance
+        // MAX_BET = int(dai.allowance(treasury,address(this)).mul(5).div(1000));   // 0.5% risk tolerance
+        MAX_BET = int(dai.balanceOf(address(this)).mul(5).div(1000));
 
         Bet storage b = bets[_requestId];
         
