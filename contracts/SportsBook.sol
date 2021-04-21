@@ -5,7 +5,6 @@ import "./SafeMath.sol";
 import "./strings.sol";
 import "./interfaces/IERC20.sol";
 import "./interfaces/IWETH.sol";
-// import "chainlink/contracts/src/v0.6/ChainlinkClient.sol";
 import "https://raw.githubusercontent.com/smartcontractkit/chainlink/develop/evm-contracts/src/v0.6/ChainlinkClient.sol";
 pragma experimental ABIEncoderV2;
 import "./uniswap/IUniswapV2Router02.sol";
@@ -106,8 +105,9 @@ contract SportsBook is ChainlinkClient  {
     bytes32 public betID;
     int256 MAX_BET;
     IERC20 dai;
-    bool allowWagers;
+    bool public isOperational;
     bool public freeFee;
+    bool public noNewBets;
     IWETH weth;
     IUniswapV2Router02 immutable uniswapV2Router;
     address immutable treasury;
@@ -120,7 +120,8 @@ contract SportsBook is ChainlinkClient  {
         treasury = _treasury;
         
         uniswapV2Router = _uniswapV2Router;
-        allowWagers = false;
+        isOperational = false;
+        noNewBets = false;
         freeFee = false;
         oracle = 0x4dfFCF075d9972F743A2812632142Be64CA8B0EE;        //CHANGE
         dai = _DAI;
@@ -128,7 +129,7 @@ contract SportsBook is ChainlinkClient  {
     }
     
     function resolveMatch( bytes32 _betID ) public {
-        require(allowWagers, 'Sports Book not active');
+        require(isOperational, 'Sports Book not active');
         Bet memory b = bets[_betID];
         require(_betID != 0x0, "Invalid Bet Reference");
         require(b.timestamp>matchCancellationTimestamp[b.index], 'Match is invalid');
@@ -157,7 +158,7 @@ contract SportsBook is ChainlinkClient  {
     }
     
     function resolveParlay( bytes32 _betID ) public {
-        require(allowWagers, 'Sports Book not active');
+        require(isOperational, 'Sports Book not active');
         Parlay memory p = parlays[_betID];
         require(_betID != 0x0, "Invalid Bet Reference");
         
@@ -194,7 +195,7 @@ contract SportsBook is ChainlinkClient  {
     
     /* Claim refund from declined bet */
     function claimRefund() external{
-        require(allowWagers, 'Sports Book not active');
+        require(isOperational, 'Sports Book not active');
         uint256 amt = refund[msg.sender];
         require(amt > 0, "No refund to claim");
         refund[msg.sender] = 0;
@@ -206,7 +207,7 @@ contract SportsBook is ChainlinkClient  {
         was placed - Used in cases of match cancellation/postponement
     */
     function refundBet( bytes32 _betID) external {
-        require(allowWagers, 'Sports Book not active');
+        require(isOperational, 'Sports Book not active');
         Bet memory b = bets[_betID];
         uint256 timestamp = matchCancellationTimestamp[b.index];
         if(b.timestamp < timestamp){
@@ -224,7 +225,7 @@ contract SportsBook is ChainlinkClient  {
         the bet placement timestamp to refund bet
     */
     function refundParlay( bytes32 _betID) external {
-        require(allowWagers, 'Sports Book not active');
+        require(isOperational, 'Sports Book not active');
         Parlay memory p = parlays[_betID];
         bool check = true;
         for(uint i=0;i<p.indexes.length;i++){
@@ -243,8 +244,8 @@ contract SportsBook is ChainlinkClient  {
     }
 
     function bet(bytes16 _betRef, uint256 _index, uint256 _selection, uint256 _wagerAmt, int256 _rule, bool _payFeeWithLink ) public payable {
-        require(allowWagers, 'Sports Book not currently accepting wagers');
-
+        require(isOperational, 'Sports Book not Operational');
+        require(!noNewBets, 'Sports Book not accepting new wagers');
         /*
             Pay Oracle Fee With LINK, or with ETH which will
             be flash swapped into LINK
@@ -286,7 +287,8 @@ contract SportsBook is ChainlinkClient  {
     }
 
     function betParlay( bytes16 _betRef,uint _amount, string memory _indexes, string memory _selections,  int[] memory _rules, bool _payFeeWithLink ) public payable{
-        require(allowWagers, 'Sports Book not currently accepting wagers');
+        require(isOperational, 'Sports Book not Operational');
+        require(!noNewBets, 'Sports Book not accepting new wagers');
 
         if(!freeFee){
             if(_payFeeWithLink){
@@ -318,7 +320,7 @@ contract SportsBook is ChainlinkClient  {
             require(indexes.length < 8, 'Parlay too large');
 
             for(uint i = 0; i < indexes.length; i++) {
-            indexes[i] = s.split(delim).toString();
+                indexes[i] = s.split(delim).toString();
             }
             
             s =  _selections.toSlice();
@@ -387,7 +389,7 @@ contract SportsBook is ChainlinkClient  {
         }else{
             Parlay memory p = parlays[_betID];
             for(uint i=0;i<p.indexes.length;i++){
-                require(!matchResults[uint(stringToBytes32(p.indexes[i]))].recorded, "Match already finalized - Cannot Delete Bet");
+                require(!matchResults[uint(stringToBytes32(p.indexes[i]))].recorded, "Match already finalized - Cannot Delete Parlay");
             }
             uint256 amt = p.amount;
             address creator = p.creator;
@@ -397,7 +399,11 @@ contract SportsBook is ChainlinkClient  {
     }
 
     function setSportsBookState(bool state) public isWard(){
-        allowWagers = state;
+        isOperational = state;
+    }
+
+    function setNoNewBets(bool state) public isWard(){
+        noNewBets = state;
     }
 
     function setWard(address appointee) public isWard(){

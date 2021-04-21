@@ -105,8 +105,9 @@ contract SportsBook is ChainlinkClient  {
     bytes32 public betID;
     int256 MAX_BET;
     IERC20 dai;
-    bool allowWagers;
+    bool public isOperational;
     bool public freeFee;
+    bool public noNewBets;
     IWETH weth;
 
     address immutable treasury;
@@ -119,7 +120,8 @@ contract SportsBook is ChainlinkClient  {
         wards[mesaj] = true;
         treasury = _treasury;
 
-        allowWagers = false;
+        isOperational = false;
+        noNewBets = false;
         freeFee = false;
         oracle = 0x4dfFCF075d9972F743A2812632142Be64CA8B0EE;        //CHANGE
         dai = _DAI;
@@ -157,7 +159,7 @@ contract SportsBook is ChainlinkClient  {
     }
     
     function resolveParlay( bytes32 _betID ) public {
-        require(allowWagers, 'Sports Book not active');
+        require(isOperational, 'Sports Book not active');
         Parlay memory p = parlays[_betID];
         require(_betID != 0x0, "Invalid Bet Reference");
         
@@ -194,7 +196,7 @@ contract SportsBook is ChainlinkClient  {
     
     /* Claim refund from declined bet */
     function claimRefund() external{
-        require(allowWagers, 'Sports Book not active');
+        require(isOperational, 'Sports Book not active');
         uint256 amt = refund[msg.sender];
         require(amt > 0, "No refund to claim");
         refund[msg.sender] = 0;
@@ -207,7 +209,7 @@ contract SportsBook is ChainlinkClient  {
         was placed - Used in cases of match cancellation/postponement
     */
     function refundBet( bytes32 _betID) external {
-        require(allowWagers, 'Sports Book not active');
+        require(isOperational, 'Sports Book not active');
         Bet memory b = bets[_betID];
         uint256 timestamp = matchCancellationTimestamp[b.index];
         if(b.timestamp < timestamp){
@@ -226,7 +228,7 @@ contract SportsBook is ChainlinkClient  {
         the bet placement timestamp to refund bet
     */
     function refundParlay( bytes32 _betID) external {
-        require(allowWagers, 'Sports Book not active');
+        require(isOperational, 'Sports Book not active');
         Parlay memory p = parlays[_betID];
         bool check = true;
         for(uint i=0;i<p.indexes.length;i++){
@@ -246,7 +248,8 @@ contract SportsBook is ChainlinkClient  {
     }
 
     function bet(bytes16 _betRef, uint256 _index, uint256 _selection, uint256 _wagerAmt, int256 _rule) public payable {
-        require(allowWagers, 'Sports Book not currently accepting wagers');
+        require(isOperational, 'Sports Book not Operational');
+        require(!noNewBets, 'Sports Book not accepting new wagers');
         bytes32 _queryID = buildBet(_index, _selection, _rule);
         
         if(_queryID != 0x0){
@@ -265,7 +268,8 @@ contract SportsBook is ChainlinkClient  {
     }
 
     function betParlay( bytes16 _betRef,uint _amount, string memory _indexes, string memory _selections,  int[] memory _rules ) public payable{
-        require(allowWagers, 'Sports Book not currently accepting wagers');
+        require(isOperational, 'Sports Book not Operational');
+        require(!noNewBets, 'Sports Book not accepting new wagers');
 
         bytes32 _queryID = buildParlay(_indexes, _selections, _rules );
 
@@ -348,7 +352,7 @@ contract SportsBook is ChainlinkClient  {
         }else{
             Parlay memory p = parlays[_betID];
             for(uint i=0;i<p.indexes.length;i++){
-                require(!matchResults[uint(stringToBytes32(p.indexes[i]))].recorded, "Match already finalized - Cannot Delete Bet");
+                require(!matchResults[uint(stringToBytes32(p.indexes[i]))].recorded, "Match already finalized - Cannot Delete Parlay");
             }
             uint256 amt = p.amount;
             address creator = p.creator;
@@ -360,6 +364,10 @@ contract SportsBook is ChainlinkClient  {
 
     function setSportsBookState(bool state) public isWard(){
         allowWagers = state;
+    }
+
+    function setNoNewBets(bool state) public isWard(){
+        noNewBets = state;
     }
 
     function setWard(address appointee) public isWard(){
