@@ -312,6 +312,36 @@ contract SportsBook is ChainlinkClient  {
             require(!matchResults[b.index].recorded, "Match already finalized - Cannot Delete Bet");
             uint256 amt = b.amount;
             address creator = b.creator;
+
+            // If bet has odds, then we need to decrement sports
+            // book risk when we delete bet
+            if(b.odds > 0){
+                uint256 riskToBeRemoved = (amt).mul(_odds).div(100);
+                if(b.selection == 0){
+                    sportsBookRisk[b.index].spreadDelta.outcome0Wagered = sportsBookRisk[b.index].spreadDelta.outcome0Wagered.sub(amt);
+                    sportsBookRisk[b.index].spreadDelta.outcome0PotentialWin = sportsBookRisk[b.index].spreadDelta.outcome0PotentialWin.sub(riskToBeRemoved);
+                }
+                else if(b.selection == 1){
+                    sportsBookRisk[b.index].spreadDelta.outcome1Wagered = sportsBookRisk[b.index].spreadDelta.outcome1Wagered.sub(amt);
+                    sportsBookRisk[b.index].spreadDelta.outcome1PotentialWin = sportsBookRisk[b.index].spreadDelta.outcome1PotentialWin.sub(riskToBeRemoved);
+                }
+                else if(b.selection == 2){
+                    sportsBookRisk[b.index].pointDelta.outcome0Wagered = sportsBookRisk[b.index].pointDelta.outcome0Wagered.sub(amt);
+                    sportsBookRisk[b.index].pointDelta.outcome0PotentialWin = sportsBookRisk[b.index].pointDelta.outcome0PotentialWin.sub(riskToBeRemoved);
+                }
+                else if(b.selection == 3){
+                    sportsBookRisk[b.index].pointDelta.outcome1Wagered = sportsBookRisk[b.index].pointDelta.outcome1Wagered.sub(amt);
+                    sportsBookRisk[b.index].pointDelta.outcome1PotentialWin = sportsBookRisk[b.index].pointDelta.outcome1PotentialWin.sub(riskToBeRemoved);
+                }
+                else if(b.selection == 4){
+                    sportsBookRisk[b.index].moneylineDelta.outcome0Wagered = sportsBookRisk[b.index].moneylineDelta.outcome0Wagered.sub(amt);
+                    sportsBookRisk[b.index].moneylineDelta.outcome0PotentialWin = sportsBookRisk[b.index].moneylineDelta.outcome0PotentialWin.sub(riskToBeRemoved);
+                }
+                else if(b.selection == 5){
+                    sportsBookRisk[b.index].moneylineDelta.outcome1Wagered = sportsBookRisk[b.index].moneylineDelta.outcome1Wagered.sub(amt);
+                    sportsBookRisk[b.index].moneylineDelta.outcome1PotentialWin = sportsBookRisk[b.index].moneylineDelta.outcome1PotentialWin.sub(riskToBeRemoved);
+                }
+            }
             delete bets[_betID];
             // dai.transferFrom(treasury,creator,amt);
             dai.transferFrom(address(this),creator,amt);

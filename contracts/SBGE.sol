@@ -3,7 +3,7 @@ pragma solidity ^0.7.0;
 import './SafeMath.sol';
 import './TransferPortal.sol';
 import './WDAI.sol';
-import './interfaces/IJuiceBookToken.sol';
+import './interfaces/IJuiceToken.sol';
 import './interfaces/IBookLiquidity.sol';
 import './interfaces/IBookTokenDistribution.sol';
 import './interfaces/IERC20.sol';
@@ -48,23 +48,23 @@ contract SBGE {
     IUniswapV2Router02 immutable uniswapV2Router;
     IUniswapV2Factory immutable uniswapV2Factory;
 
-    IJuiceBookToken immutable JBT;
+    IJuiceToken immutable JCE;
     WDAI immutable wdai;
     IERC20 immutable dai;
     IJuiceBookTreasury immutable treasury;
 
-    IUniswapV2Pair JBTwdai;
+    IUniswapV2Pair JCEwdai;
     IERC20 lpToken;
 
     uint256 public totalDAICollected;
-    uint256 public totalJBTBought;
-    uint256 public totalJBTwdai;
+    uint256 public totalJCEBought;
+    uint256 public totalJCEwdai;
     uint256 public totalDAIwdai;
 
     // Scaled By a Factor of 100: 10000 = 100%
-    uint16 constant public poolPercent = 8000; // JBT-wDAI Liquidity Pool
+    uint16 constant public poolPercent = 8000; // JCE-wDAI Liquidity Pool
     uint16 constant public daiPoolPercent = 600; // DAI-wDAI Liquidity Pool
-    uint16 constant public buyPercent = 400; // Used to execute initial purchase of JBT from LP for contributors
+    uint16 constant public buyPercent = 400; // Used to execute initial purchase of JCE from LP for contributors
     uint16 constant public development = 500; // Developemt/Project Fund
     uint16 constant public devPayment = 500; // Payment
 
@@ -78,11 +78,11 @@ contract SBGE {
         _;
     }
 
-    constructor(IJuiceBookToken _JBT, IUniswapV2Router02 _uniswapV2Router, WDAI _wdai, IJuiceBookTreasury _treasury, IWETH _WETH){
-        require (address(_JBT) != address(0x0));
+    constructor(IJuiceToken _JCE, IUniswapV2Router02 _uniswapV2Router, WDAI _wdai, IJuiceBookTreasury _treasury, IWETH _WETH){
+        require (address(_JCE) != address(0x0));
         require (address(_treasury) != address(0x0));
 
-        JBT = _JBT;
+        JCE = _JCE;
         // DAI = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
         // WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;   //REAL WETH ADDR
         WETH = _WETH; // FAKE WETH ADDR
@@ -100,13 +100,13 @@ contract SBGE {
         _wdai.wrappedToken().approve(address(_wdai),uint(-1));
         _wdai.approve(address(_uniswapV2Router), uint256(-1));
         _wdai.wrappedToken().approve(address(_uniswapV2Router), uint256(-1));
-        _JBT.approve(address(_uniswapV2Router), uint256(-1));
+        _JCE.approve(address(_uniswapV2Router), uint256(-1));
         _WETH.approve(address(_uniswapV2Router), uint256(-1));
     }
 
     function activate() public isMesaj(){
         require (!isActive && contributors.length == 0 && block.timestamp >= refundsAllowedUntil, "Already activated");
-        require (JBT.balanceOf(address(this)) == JBT.totalSupply(), "Total token supply required to activate SBGE");
+        require (JCE.balanceOf(address(this)) == JCE.totalSupply(), "Total token supply required to activate SBGE");
 
         isActive = true;
     }
@@ -228,7 +228,7 @@ contract SBGE {
 
         /*
             If refund is active refund DAI contribution -
-            else claim their LP and JBT token
+            else claim their LP and JCE token
         */
         if (refundsAllowedUntil > block.timestamp) {
             dai.transfer(msg.sender, amount);
@@ -294,22 +294,22 @@ contract SBGE {
     }
 
 
-    function setupJBTwdai() public isMesaj() {
-        JBTwdai = IUniswapV2Pair(uniswapV2Factory.getPair(address(wdai), address(JBT)));
-        if (address(JBTwdai) == address(0)) {
-            JBTwdai = IUniswapV2Pair(uniswapV2Factory.createPair(address(wdai), address(JBT)));
-            require (address(JBTwdai) != address(0));
+    function setupJCEwdai() public isMesaj() {
+        JCEwdai = IUniswapV2Pair(uniswapV2Factory.getPair(address(wdai), address(JBT)));
+        if (address(JCEwdai) == address(0)) {
+            JCEwdai = IUniswapV2Pair(uniswapV2Factory.createPair(address(wdai), address(JBT)));
+            require (address(JCEwdai) != address(0));
         }
     }
 
     function preBuyForGroup(uint256 amount) internal {
         address[] memory path = new address[](2);
         path[0] = address(wdai);
-        path[1] = address(JBT);
+        path[1] = address(JCE);
         uint256 wrapAmount = amount.mul(buyPercent).div(10000);
         wdai.deposit(wrapAmount);
         uint256 buyAmount = wdai.balanceOf(address(this));
-        uint256[] memory amountsJBT = uniswapV2Router.swapExactTokensForTokens(buyAmount, 0, path, address(this), block.timestamp);
+        uint256[] memory amountsJCE = uniswapV2Router.swapExactTokensForTokens(buyAmount, 0, path, address(this), block.timestamp);
 
     }
 
@@ -321,10 +321,10 @@ contract SBGE {
         distributionComplete = true;
         totalDAICollected = totalDAI;
 
-        TransferPortal portal = TransferPortal(address(JBT.transferPortal()));
+        TransferPortal portal = TransferPortal(address(JCE.transferPortal()));
         portal.setFreeTransfers(true);
 
-        createJBTwdaiLiquidity(totalDAI);
+        createJCEwdaiLiquidity(totalDAI);
         createDAILiquidity(totalDAI);
         preBuyForGroup(totalDAI);
 
@@ -341,33 +341,33 @@ contract SBGE {
         (,,totalDAIwdai) = uniswapV2Router.addLiquidity(address(wdai), address(dai), wdai.balanceOf(address(this)), wdai.balanceOf(address(this)), 0, 0, address(this), block.timestamp);
     }
 
-    function createJBTwdaiLiquidity(uint256 totalDAI) internal{
-        // Create WDAI/JBT Liquidity Pool 
+    function createJCEwdaiLiquidity(uint256 totalDAI) internal{
+        // Create WDAI/JCE Liquidity Pool 
         wdai.deposit(totalDAI.mul(poolPercent).div(10000));
 
-        (,,totalJBTwdai) = uniswapV2Router.addLiquidity(address(wdai), address(JBT), wdai.balanceOf(address(this)), JBT.totalSupply(), 0, 0, address(this), block.timestamp);
-        lpToken = IERC20(uniswapV2Factory.getPair(address(wdai), address(JBT)));
+        (,,totalJCEwdai) = uniswapV2Router.addLiquidity(address(wdai), address(JCE), wdai.balanceOf(address(this)), JCE.totalSupply(), 0, 0, address(this), block.timestamp);
+        lpToken = IERC20(uniswapV2Factory.getPair(address(wdai), address(JCE)));
     }
 
     function _claim(address _to, uint256 _contribution) internal {
         uint256 totalDAI = totalDAICollected;
 
-        // Send JBT/wDAI liquidity tokens
-        uint256 share = _contribution.mul(totalJBTwdai) / totalDAI;
+        // Send JCE/wDAI liquidity tokens
+        uint256 share = _contribution.mul(totalJCEwdai) / totalDAI;
         if (share > lpToken.balanceOf(address(this))) {
             share = lpToken.balanceOf(address(this));
         }
         lpToken.transfer(_to, share);  
 
-        // Send JBT
-        TransferPortal portal = TransferPortal(address(JBT.transferPortal()));
+        // Send JCE
+        TransferPortal portal = TransferPortal(address(JCE.transferPortal()));
         portal.setFreeTransfers(true);
 
-        share = _contribution.mul(totalJBTBought) / totalDAI;
-        if (share > JBT.balanceOf(address(this))) {
-            share = JBT.balanceOf(address(this));
+        share = _contribution.mul(totalJCEBought) / totalDAI;
+        if (share > JCE.balanceOf(address(this))) {
+            share = JCE.balanceOf(address(this));
         }
-        JBT.transfer(_to, share);
+        JCE.transfer(_to, share);
 
         portal.setFreeTransfers(false);
     }
