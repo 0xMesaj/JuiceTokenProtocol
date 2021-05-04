@@ -5,8 +5,9 @@ import "./SafeMath.sol";
 import "./ERC20.sol";
 import "./interfaces/ITransferPortal.sol";
 import "./interfaces/IERC20.sol";
-import "./interfaces/IJuiceBookVault.sol";
+import "./interfaces/IJuiceVault.sol";
 import "./uniswap/IUniswapV2Factory.sol";
+
 
 /*
     Juice Token has a transfer portal that is changeable through on-chain governance
@@ -26,7 +27,7 @@ contract JuiceToken is ERC20{
     address public mesaj;
 
     ITransferPortal public transferPortal;
-    IJuiceBookVault vault;
+    IJuiceVault vault;
     uint public proposalCount;
 
     struct Proposal {
@@ -146,12 +147,12 @@ contract JuiceToken is ERC20{
     // Subtract the JBT within the LPs
     function getMinRequiredVotes() internal view returns(uint256 amt){
         uint256 poolNum = vault.poolInfoCount();
-        uint256 pooledJBTCount = 0;
+        uint256 pooledJCECount = 0;
         for(uint i=0;i<poolNum;i++){
-            pooledJBTCount = pooledJBTCount.add(vault.getPooledJBT(i));
+            pooledJCECount = pooledJCECount.add(vault.getPooledJCE(i));
         }
         uint JBTSupply = totalSupply;
-        amt = JBTSupply.sub(pooledJBTCount).mul(51).div(100);
+        amt = JBTSupply.sub(pooledJCECount).mul(51).div(100);
     }
 
     function judgeProposal(uint proposalID) public {
@@ -166,11 +167,12 @@ contract JuiceToken is ERC20{
         }
     }
 
+    //Set Initial Transfer Portal address, only callable once
     function setTransferPortal(ITransferPortal _transferPortal) external mesajOnly(){
+        require(address(transferPortal) == address(0x0), "Transfer Portal Already Initiailized");
         transferPortal = _transferPortal;
     }
 
-    
     function burn(uint256 amount) public virtual returns(bool) {
         _burn(msg.sender, amount);
         return true;
@@ -219,7 +221,7 @@ contract JuiceToken is ERC20{
         return chainId;
     }
 
-    function setJCEVault( IJuiceBookVault _vault ) external isTreasurer(){
+    function setJCEVault( IJuiceVault _vault ) external isTreasurer(){
         require( address(vault) == address(0x0), "Vault already set");
         vault = _vault;
     }

@@ -11,60 +11,60 @@ import './SafeMath.sol';
 
 /*
 
- Convenience contract for JBT Protocol. Allows for purchase of  JBT without wDAI, and sale of JBT directly to other token
+ Convenience contract for Juice Protocol. Allows for purchase of Juice token directly with DAI, and sale of Juice token directly to other token
  in single tx...
- - Buys first convert purchasing token to DAI, then wrap to wDAI and purchase JBT, 
- - Sells first will sell JBT for wDAI then unwrap wDAI to DAI
+ - Buys first convert purchasing token to DAI, then wrap to wDAI and purchase JCE, 
+ - Sells first will sell JCE for wDAI then unwrap wDAI to DAI
 
 */
 
 contract JuiceBookSwap {
     using SafeMath for uint256;
-    IERC20 JBT;
+    IERC20 JCE;
     IWDAI wdai;
     IERC20 dai;
     IUniswapV2Router02 immutable router;
     IUniswapV2Factory immutable factory;
     address immutable pair;
     
-    constructor( IERC20 _JBT, IWDAI _wdai, IUniswapV2Router02 _uniswapV2Router) {
-        JBT = _JBT;
+    constructor( IERC20 _JCE, IWDAI _wdai, IUniswapV2Router02 _uniswapV2Router) {
+        JCE = _JCE;
         wdai = _wdai;
         dai = wdai.wrappedToken();
         router = _uniswapV2Router;
         factory = IUniswapV2Factory(_uniswapV2Router.factory());
-        pair = IUniswapV2Factory(_uniswapV2Router.factory()).getPair(address(JBT), address(wdai));
+        pair = IUniswapV2Factory(_uniswapV2Router.factory()).getPair(address(JCE), address(wdai));
 
         wdai.approve(address(_uniswapV2Router),uint(-1));
         dai.approve(address(wdai),uint(-1));
         wdai.approve(address(wdai),uint(-1));
     }
 
-    function buyJBTwithDAI(uint256 amt) public {
+    function buyJCEwithDAI(uint256 amt) public {
         uint256 pre_wdaiBalance = wdai.balanceOf(address(this));
         dai.transferFrom(msg.sender, address(this), amt);
         wdai.deposit(amt);
         uint256 post_wdaiBalance = wdai.balanceOf(address(this));
         require(post_wdaiBalance == (amt.add(pre_wdaiBalance)), "Error: Wrap");
 
-        uint256 pre_JBTBalance = JBT.balanceOf(address(this));
+        uint256 pre_JBTBalance = JCE.balanceOf(address(this));
         address[] memory path = new address[](2);
         path[0] = address(wdai);
-        path[1] = address(JBT);
+        path[1] = address(JCE);
         router.swapExactTokensForTokensSupportingFeeOnTransferTokens(amt, 0, path, address(this), block.timestamp);
-        uint256 post_JBTBalance = JBT.balanceOf(address(this));
+        uint256 post_JBTBalance = JCE.balanceOf(address(this));
         require(post_JBTBalance > pre_JBTBalance, "Error: Swap");
         uint256 JBTAmt = post_JBTBalance.sub(pre_JBTBalance);
-        JBT.transfer(msg.sender, JBTAmt);
+        JCE.transfer(msg.sender, JBTAmt);
     }
 
-    function sellJBTforDAI(uint256 amt) public {
-        JBT.transferFrom(msg.sender, address(this), amt);
+    function sellJCEforDAI(uint256 amt) public {
+        JCE.transferFrom(msg.sender, address(this), amt);
         address[] memory path = new address[](2);
-        path[0] = address(JBT);
+        path[0] = address(JCE);
         path[1] = address(wdai);
-        JBT.approve(address(router),uint(-1));
-        uint256 sellAmt = JBT.balanceOf(address(this));
+        JCE.approve(address(router),uint(-1));
+        uint256 sellAmt = JCE.balanceOf(address(this));
 
         uint256 pre_wdaiBalance = wdai.balanceOf(address(this));
         router.swapExactTokensForTokensSupportingFeeOnTransferTokens(sellAmt, 0, path, address(this), block.timestamp);

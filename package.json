@@ -16,5 +16,9 @@
     "ethereum-waffle": "^3.2.2",
     "hardhat": "^2.0.8",
     "hardhat-gas-reporter": "^1.0.4"
+  },
+  "dependencies": {
+    "@chainlink/contracts": "^0.1.7",
+    "@studydefi/money-legos": "^2.4.2"
   }
 }

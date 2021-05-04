@@ -6,37 +6,36 @@ import "./SafeMath.sol";
 import "./interfaces/IERC20.sol";
 import "./interfaces/IWDAI.sol";
 import "./interfaces/ILockedLiqCalculator.sol";
-import "./interfaces/IJuiceBookToken.sol";
-import "./interfaces/IJuiceBookVault.sol";
+import "./interfaces/IJuiceToken.sol";
+import "./interfaces/IJuiceVault.sol";
 import "./uniswap/IUniswapV2Router02.sol";
 import "./uniswap/IUniswapV2Factory.sol";
-
 
 /*
     JuiceBook Treasury holds DAI liquidity for the BOOK token protocol - to be utilized in approved
     strategies to generate profit. These strategies are approved through on-chain voting
-    with the BOOK token
+    with JUICE Token
 */
 
-contract JuiceBookTreasury {
+contract JuiceTreasury {
     using SafeERC20 for IERC20;
     using SafeMath for uint;
 
 
-    string public constant name = "JuiceBook Treasury";
+    string public constant name = "Juice Treasury";
     bytes32 public constant DOMAIN_TYPEHASH = keccak256("EIP712Domain(string name,uint256 chainId,address verifyingContract)");
     bytes32 public constant BALLOT_TYPEHASH = keccak256("Ballot(uint256 proposalId,bool support)");
 
     uint public proposalCount;
     uint256 MIN_REQUIREMENT = uint(-1);
     address mesaj;
-    IJuiceBookToken JBT;
+    IJuiceToken JCE;
     IERC20 DAI;
     IWDAI WDAI;
     IUniswapV2Factory factory;
     IUniswapV2Router02 router;
     ILockedLiqCalculator BookLiqCalculator;
-    IJuiceBookVault vault;
+    IJuiceVault vault;
     
     struct Proposal {
         uint id;
@@ -88,11 +87,11 @@ contract JuiceBookTreasury {
         treasurers[shame] = false;
     }
     
-    constructor( IJuiceBookVault _vault, address _sportsBook, IERC20 _DAI,  IJuiceBookToken _JBT, ILockedLiqCalculator _BookLiqCalculator, IUniswapV2Factory _factory, IUniswapV2Router02 _router ) {
+    constructor( IJuiceVault _vault, address _sportsBook, IERC20 _DAI,  IJuiceToken _JCE, ILockedLiqCalculator _BookLiqCalculator, IUniswapV2Factory _factory, IUniswapV2Router02 _router ) {
         factory = _factory;
         router = _router;
         BookLiqCalculator = _BookLiqCalculator;
-        JBT = _JBT;
+        JCE = _JCE;
         DAI = _DAI;
 
         vault = _vault;
@@ -131,11 +130,11 @@ contract JuiceBookTreasury {
 
         address[] memory path = new address[](2);
         path[0] = address(WDAI);
-        path[1] = address(JBT);
+        path[1] = address(JCE);
 
         router.swapExactTokensForTokensSupportingFeeOnTransferTokens(WDAI.balanceOf(address(this)), 0, path, address(this), 2e9);
         
-        JBT.burn(JBT.balanceOf(address(this)));
+        JCE.burn(JCE.balanceOf(address(this)));
         uint256 wDAIamt = BookLiqCalculator.simulateSell(DAI, address(WDAI));
         WDAI.fund(address(this));
         uint256 DAIbacking = DAI.balanceOf(address(WDAI));
@@ -178,7 +177,7 @@ contract JuiceBookTreasury {
         Proposal storage proposal = proposals[proposalId];
         Receipt storage receipt = proposal.receipts[voter];
         require(receipt.hasVoted == false, "_castVote: voter already voted");
-        uint256 votes = JBT.balanceOf(voter);
+        uint256 votes = JCE.balanceOf(voter);
 
         if (support) {
             proposal.forVotes = votes.add(proposal.forVotes);
@@ -193,16 +192,16 @@ contract JuiceBookTreasury {
         emit VoteCast(voter, proposalId, support, votes);
     }
 
-    // Min Required Votes to Reject is 51% of the Circulating JBT Token
-    // Subtract the JBT within the LPs
+    // Min Required Votes to Reject is 51% of the Circulating JCE Token
+    // Subtract the JCE within the LPs
     function getMinRequiredVotes() internal view returns(uint256 amt){
         uint256 poolNum = vault.poolInfoCount();
-        uint256 pooledJBTCount = 0;
+        uint256 pooledJCECount = 0;
         for(uint i=0;i<poolNum;i++){
-            pooledJBTCount = pooledJBTCount.add(vault.getPooledJBT(i));
+            pooledJCECount = pooledJCECount.add(vault.getPooledJCE(i));
         }
-        uint JBTSupply = JBT.totalSupply();
-        amt = JBTSupply.sub(pooledJBTCount).mul(51).div(100);
+        uint JCESupply = JCE.totalSupply();
+        amt = JCESupply.sub(pooledJCECount).mul(51).div(100);
     }
 
     function judgeProposal(uint proposalID) public {

@@ -4,7 +4,7 @@ import "./interfaces/IERC20.sol";
 import "./SafeMath.sol";
 import "./SafeERC20.sol";
 
-contract JuiceBookVault{
+contract JuiceVault{
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
@@ -26,8 +26,6 @@ contract JuiceBookVault{
     }
 
     address mesaj;
-
-  
 
     IERC20 public immutable rewardToken;
 

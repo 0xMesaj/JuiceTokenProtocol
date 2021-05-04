@@ -6,6 +6,12 @@ require('@nomiclabs/hardhat-waffle');
 module.exports = {
   // solidity: "0.5.12",
   solidity: {
+    settings: {
+      optimizer: {
+        enabled: true,
+        runs: 2000
+      }
+    },
     compilers: [
       {
         version: "0.4.24",

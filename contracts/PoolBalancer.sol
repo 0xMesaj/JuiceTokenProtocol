@@ -1,187 +1,108 @@
-// The ABI encoder is necessary, but older Solidity versions should work
-pragma solidity ^0.7.0;
-pragma experimental ABIEncoderV2;
+// pragma solidity ^0.5.0;
+// pragma experimental ABIEncoderV2;
 
-// These definitions are taken from across multiple dydx contracts, and are
-// limited to just the bare minimum necessary to make flash loans work.
-library Types {
-    enum AssetDenomination { Wei, Par }
-    enum AssetReference { Delta, Target }
-    struct AssetAmount {
-        bool sign;
-        AssetDenomination denomination;
-        AssetReference ref;
-        uint256 value;
-    }
-}
+// import "@studydefi/money-legos/dydx/contracts/DydxFlashloanBase.sol";
+// import "@studydefi/money-legos/dydx/contracts/ICallee.sol";
 
-library Account {
-    struct Info {
-        address owner;
-        uint256 number;
-    }
-}
+// import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+// import './uniswap/IUniswapV2Pair.sol';
+// import './uniswap/IUniswapV2Router02.sol';
+// import './interfaces/IWDAI.sol';
 
-library Actions {
-    enum ActionType {
-        Deposit, Withdraw, Transfer, Buy, Sell, Trade, Liquidate, Vaporize, Call
-    }
-    struct ActionArgs {
-        ActionType actionType;
-        uint256 accountId;
-        Types.AssetAmount amount;
-        uint256 primaryMarketId;
-        uint256 secondaryMarketId;
-        address otherAddress;
-        uint256 otherAccountId;
-        bytes data;
-    }
-}
+// contract DydxFlashloaner is ICallee, DydxFlashloanBase {
+//     address lp;
+//     address mesaj;
+//     IWDAI wDAI;
 
-interface ISoloMargin {
-    function operate(Account.Info[] memory accounts, Actions.ActionArgs[] memory actions) external;
-}
+//     constructor(address _lp, IWDAI _wDAI){
+//         mesaj = msg.sender;
+//         lp = _lp;
+//         wDAI = _wDAI;
+//     }
 
-// The interface for a contract to be callable after receiving a flash loan
-interface ICallee {
-    function callFunction(address sender, Account.Info memory accountInfo, bytes memory data) external;
-}
+//     function setLPAddress(address _lp){
+//         require(msg.owner = mesaj, "Mesaj only");
+//         lp = _lp;
+//     }
 
-// Standard ERC-20 interface
-interface IERC20 {
-    function totalSupply() external view returns (uint256);
-    function balanceOf(address account) external view returns (uint256);
-    function transfer(address recipient, uint256 amount) external returns (bool);
-    function allowance(address owner, address spender) external view returns (uint256);
-    function approve(address spender, uint256 amount) external returns (bool);
-    function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
-    event Transfer(address indexed from, address indexed to, uint256 value);
-    event Approval(address indexed owner, address indexed spender, uint256 value);
-}
+//     struct MyCustomData {
+//         address token;
+//         uint256 repayAmount;
+//     }
 
-// Additional methods available for WETH
-interface IWETH is IERC20 {
-    function deposit() external payable;
-    function withdraw(uint wad) external;
-}
+//     // This is the function that will be called postLoan
+//     // i.e. Encode the logic to handle your flashloaned funds here
+//     function callFunction(
+//         address sender,
+//         Account.Info memory account,
+//         bytes memory data
+//     ) public {
+//         MyCustomData memory mcd = abi.decode(data, (MyCustomData));
+//         uint256 balOfLoanedToken = IERC20(mcd.token).balanceOf(address(this));
 
-contract FlashLoanTemplate is ICallee {
-    // The WETH token contract, since we're assuming we want a loan in WETH
-    IWETH private WETH = IWETH(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
-    // The dydx Solo Margin contract, as can be found here:
-    // https://github.com/dydxprotocol/solo/blob/master/migrations/deployed.json
-    ISoloMargin private soloMargin = ISoloMargin(0x1E0447b19BB6EcFdAe1e4AE1694b0C3659614e4e);
+//         // Note that you can ignore the line below
+//         // if your dydx account (this contract in this case)
+//         // has deposited at least ~2 Wei of assets into the account
+//         // to balance out the collaterization ratio
+//         require(
+//             balOfLoanedToken >= mcd.repayAmount,
+//             "Not enough funds to repay dydx loan!"
+//         );
 
-    constructor() {
-        // Give infinite approval to dydx to withdraw WETH on contract deployment,
-        // so we don't have to approve the loan repayment amount (+2 wei) on each call.
-        // The approval is used by the dydx contract to pay the loan back to itself.
-        WETH.approve(address(soloMargin), uint(-1));
-    }
-    
-    // This is the function we call
-    function flashLoan(uint loanAmount) external {
-        /*
-        The flash loan functionality in dydx is predicated by their "operate" function,
-        which takes a list of operations to execute, and defers validating the state of
-        things until it's done executing them.
-        
-        We thus create three operations, a Withdraw (which loans us the funds), a Call
-        (which invokes the callFunction method on this contract), and a Deposit (which
-        repays the loan, plus the 2 wei fee), and pass them all to "operate".
-        
-        Note that the Deposit operation will invoke the transferFrom to pay the loan 
-        (or whatever amount it was initialised with) back to itself, there is no need
-        to pay it back explicitly.
-        
-        The loan must be given as an ERC-20 token, so WETH is used instead of ETH. Other
-        currencies (DAI, USDC) are also available, their index can be looked up by
-        calling getMarketTokenAddress on the solo margin contract, and set as the 
-        primaryMarketId in the Withdraw and Deposit definitions.
-        */
-        
-        Actions.ActionArgs[] memory operations = new Actions.ActionArgs[](3);
+//         // TODO: Encode your logic here
+//         // E.g. arbitrage, liquidate accounts, etc
+//         // revert("Hello, you haven't encoded your logic");
 
-        operations[0] = Actions.ActionArgs({
-            actionType: Actions.ActionType.Withdraw,
-            accountId: 0,
-            amount: Types.AssetAmount({
-                sign: false,
-                denomination: Types.AssetDenomination.Wei,
-                ref: Types.AssetReference.Delta,
-                value: loanAmount // Amount to borrow
-            }),
-            primaryMarketId: 0, // WETH
-            secondaryMarketId: 0,
-            otherAddress: address(this),
-            otherAccountId: 0,
-            data: ""
-        });
-        
-        operations[1] = Actions.ActionArgs({
-                actionType: Actions.ActionType.Call,
-                accountId: 0,
-                amount: Types.AssetAmount({
-                    sign: false,
-                    denomination: Types.AssetDenomination.Wei,
-                    ref: Types.AssetReference.Delta,
-                    value: 0
-                }),
-                primaryMarketId: 0,
-                secondaryMarketId: 0,
-                otherAddress: address(this),
-                otherAccountId: 0,
-                data: abi.encode(
-                    // Replace or add any additional variables that you want
-                    // to be available to the receiver function
-                    msg.sender,
-                    loanAmount
-                )
-            });
-        
-        operations[2] = Actions.ActionArgs({
-            actionType: Actions.ActionType.Deposit,
-            accountId: 0,
-            amount: Types.AssetAmount({
-                sign: true,
-                denomination: Types.AssetDenomination.Wei,
-                ref: Types.AssetReference.Delta,
-                value: loanAmount + 2 // Repayment amount with 2 wei fee
-            }),
-            primaryMarketId: 0, // WETH
-            secondaryMarketId: 0,
-            otherAddress: address(this),
-            otherAccountId: 0,
-            data: ""
-        });
+//         //Reserve 0 is DAI reserve and Reserve 1 is wDAI reserve
+//         (uint256 reserve0, uint256 reserve1, ) = IUniswapV2Pair(lp);
 
-        Account.Info[] memory accountInfos = new Account.Info[](1);
-        accountInfos[0] = Account.Info({owner: address(this), number: 1});
+//         // wDAI above $1, wrap DAI->wDAI then swap wDAI for DAI
+//         if(reserve0 > reserve1){
+//             IWDAI.deposit(balOfLoanedToken);
+//             uint256 wDAIbal = IERC20(wDAI).balanceOf(address(this));
+//             address[] memory path = new address[](2);
+//             path[0] = address(wDAI);
+//             path[1] = address(mcd.token);
+//             uniswapV2Router.swapExactTokensForTokensSupportingFeeOnTransferTokens(wDAIbal, 0, path, address(this), block.timestamp);
+//         }
+//         else{   //wDAI below $1, swap DAI for wDAI then unwrap wDAI->DAI
+//             address[] memory path = new address[](2);
+//             path[0] = address(mcd.token);
+//             path[1] = address(wDAI);
+//             uniswapV2Router.swapExactTokensForTokensSupportingFeeOnTransferTokens(balOfLoanedToken, 0, path, address(this), block.timestamp);
+//             uint256 wDAIBalance = wDAI.balanceOf(address(this));
+//             IWDAI.withdraw(wDAIBalance);
+//         }
+//     }
 
-        soloMargin.operate(accountInfos, operations);
-    }
-    
-    // This is the function called by dydx after giving us the loan
-    function callFunction(address sender, Account.Info memory accountInfo, bytes memory data) external override {
-        // Decode the passed variables from the data object
-        (
-            // This must match the variables defined in the Call object above
-            address payable actualSender,
-            uint loanAmount
-        ) = abi.decode(data, (
-            address, uint
-        ));
-        
-        // We now have a WETH balance of loanAmount. The logic for what we
-        // want to do with it goes here. The code below is just there in case
-        // it's useful.
-        
-        // It can be useful for debugging to have a verbose error message when
-        // the loan can't be paid, since dydx doesn't provide one
-        require(WETH.balanceOf(address(this)) > loanAmount + 2, "CANNOT REPAY LOAN");
-        // Leave just enough WETH to pay back the loan, and convert the rest to ETH
-        WETH.withdraw(WETH.balanceOf(address(this)) - loanAmount - 2);
-        // Send any profit in ETH to the account that invoked this transaction
-        actualSender.transfer(address(this).balance);
-    }
-}
+//     function initiateFlashLoan(address _solo, address _token, uint256 _amount)
+//         external
+//     {
+//         ISoloMargin solo = ISoloMargin(_solo);
+
+//         // Get marketId from token address
+//         uint256 marketId = _getMarketIdFromTokenAddress(_solo, _token);
+
+//         // Calculate repay amount (_amount + (2 wei))
+//         // Approve transfer from
+//         uint256 repayAmount = _getRepaymentAmountInternal(_amount);
+//         IERC20(_token).approve(_solo, repayAmount);
+
+//         // 1. Withdraw $
+//         // 2. Call callFunction(...)
+//         // 3. Deposit back $
+//         Actions.ActionArgs[] memory operations = new Actions.ActionArgs[](3);
+
+//         operations[0] = _getWithdrawAction(marketId, _amount);
+//         operations[1] = _getCallAction(
+//             // Encode MyCustomData for callFunction
+//             abi.encode(MyCustomData({token: _token, repayAmount: repayAmount}))
+//         );
+//         operations[2] = _getDepositAction(marketId, repayAmount);
+
+//         Account.Info[] memory accountInfos = new Account.Info[](1);
+//         accountInfos[0] = _getAccountInfo();
+
+//         solo.operate(accountInfos, operations);
+//     }
+// }

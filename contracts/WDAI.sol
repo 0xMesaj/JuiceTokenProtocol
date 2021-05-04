@@ -1,5 +1,7 @@
 // Wrapped DAI - wDAI
-// wDAI and DAI always exchange 1:1
+// wDAI and DAI always exchange 1:1 through deposit/withdraw functions
+// Proposal Type for Governance:
+// TRUE for Locked Liquidity Calc Proposal, FALSE for Treasury Proposal
 
 pragma solidity ^0.7.0;
 
@@ -7,7 +9,7 @@ import "./SafeERC20.sol";
 import "./ERC20.sol";
 import "./interfaces/ILockedLiqCalculator.sol";
 import "./interfaces/IERC20.sol";
-import "./interfaces/IJuiceBookVault.sol";
+import "./interfaces/IJuiceVault.sol";
 import "./uniswap/IUniswapV2Factory.sol";
 import "./SafeMath.sol";
 
@@ -22,19 +24,23 @@ contract WDAI is ERC20{
 
     event Deposit(address indexed from, uint256 amount);
     event Withdrawal(address indexed to, uint256 amount);
-    event ProposalCreated(uint id, uint startBlock, uint endBlock, address upgrade);
-    event VoteCast(address voter, uint proposalId, bool support, uint votes);
+
+    event LiquidityProposalCreated(uint id, uint startBlock, uint endBlock, address upgrade);
+    event LiquidityVoteCast(address voter, uint proposalId, bool support, uint votes);
+    event TreasuryProposalCreated(uint id, uint startBlock, uint endBlock, address upgrade);
+    event TreasuryVoteCast(address voter, uint proposalId, bool support, uint votes);
 
     mapping (address => bool) public quaestor;
     mapping (address => bool) public treasury;
 
-    uint public proposalCount;
+    uint public liquidityProposalCount;
+    uint public treasuryProposalCount;
     IERC20 public immutable wrappedToken;
     IUniswapV2Factory factory;
     ILockedLiqCalculator public lockedLiqCalculator;
     address mesaj;
-    IERC20 JBT;
-    IJuiceBookVault vault;
+    IERC20 JCE;
+    IJuiceVault vault;
 
     struct Proposal {
         uint id;
@@ -55,7 +61,6 @@ contract WDAI is ERC20{
         uint256 votes;
     }
 
-
     enum ProposalState {
         Pending,
         Active,
@@ -66,34 +71,35 @@ contract WDAI is ERC20{
         Executed
     }
 
-    mapping(address => bool) public treasurers;
-    mapping (uint => Proposal) public proposals;
+    mapping (address => bool) public treasurers;
+    mapping (uint => Proposal) public liquidityProposals;
+    mapping (uint => Proposal) public treasuryProposals;
 
 
-    modifier mesajOnly(){
-        require (msg.sender == mesaj, "Mesaj only");
+    modifier quaestorOnly(){
+        require (quaestor[msg.sender], "Error: Quaestors only");
         _;
     }
 
-    constructor ( IJuiceBookVault _vault,IERC20 _JBT, IERC20 _wrappedToken, address _treasury, IUniswapV2Factory _factory, string memory _name, string memory _symbol) ERC20 (_name, _symbol) {
+    constructor ( IJuiceVault _vault,IERC20 _JCE, IERC20 _wrappedToken, address _treasury, IUniswapV2Factory _factory, string memory _name, string memory _symbol ) ERC20 (_name, _symbol) {
         wrappedToken = _wrappedToken;
         treasury[_treasury] = true;
         quaestor[_treasury] = true;
         quaestor[msg.sender] = true;
 
         vault = _vault;
-        JBT = _JBT;
+        JCE = _JCE;
         mesaj = msg.sender;
     }
 
     /* Set the address for initial lockedLiqCalculator, cannot be recalled after first execution -
        Only way to change lockedLiqCalculator is through governance proposals */
-    function setLiquidityCalculator(ILockedLiqCalculator _lockedLiqCalculator) external mesajOnly(){
+    function setLiquidityCalculator(ILockedLiqCalculator _lockedLiqCalculator) external quaestorOnly(){
         require(address(lockedLiqCalculator) == address(0x0), "Function no longer callable after first execution");
         lockedLiqCalculator = _lockedLiqCalculator;
     }
 
-    function promoteQuaestor(address sweeper, bool _isApproved) external mesajOnly(){
+    function promoteQuaestor(address sweeper, bool _isApproved) external quaestorOnly(){
         quaestor[sweeper] = _isApproved;
     }
 
@@ -103,7 +109,7 @@ contract WDAI is ERC20{
         treasurers[shame] = false;
     }
 
-    function designateTreasury(address _treasury, bool _isApproved) external mesajOnly(){
+    function designateTreasury(address _treasury, bool _isApproved) external quaestorOnly(){
         require (quaestor[msg.sender], "Error: Quaestors only");
         treasury[_treasury] = _isApproved;
     }
@@ -113,7 +119,7 @@ contract WDAI is ERC20{
         require (quaestor[msg.sender], "Error: Quaestors only");
         
         uint256 fundAmount = lockedLiqCalculator.calculateLockedwDAI(wrappedToken, address(this));
-        IJuiceBookVault(to).initializeTreasury(fundAmount);
+        IJuiceVault(to).initializeTreasury(fundAmount);
         if (fundAmount > 0) {
             wrappedToken.transferFrom(address(this),to, fundAmount);
         }
@@ -154,15 +160,15 @@ contract WDAI is ERC20{
         emit Withdrawal(msg.sender, _amount);
     }  
 
-    function proposeStrategy(address _strategy) public {
+    function proposeLiquidityStrategy(address _strategy) public {
         require (quaestor[msg.sender], "Error: Quaestors only");
         uint _startBlock = block.number;
         uint _endBlock = _startBlock.add(5760);
 
-        proposalCount++;
+        liquidityProposalCount++;
 
-        Proposal storage p = proposals[proposalCount];
-        p.id = proposalCount;
+        Proposal storage p = liquidityProposals[liquidityProposalCount];
+        p.id = liquidityProposalCount;
         p.upgrade = _strategy;
         p.startBlock = _startBlock;
         p.endBlock = _endBlock;
@@ -171,28 +177,48 @@ contract WDAI is ERC20{
         p.minVotes = getMinRequiredVotes();
         p.canceled = false;
         p.executed = false;
-        emit ProposalCreated(p.id, _startBlock, _endBlock, _strategy);
+        emit LiquidityProposalCreated(p.id, _startBlock, _endBlock, _strategy);
     }
 
-    function castVote(uint proposalId, bool support) public {
-        return _castVote(msg.sender, proposalId, support);
+    function proposeTreasuryStrategy(address _strategy) public {
+        require (quaestor[msg.sender], "Error: Quaestors only");
+        uint _startBlock = block.number;
+        uint _endBlock = _startBlock.add(5760);
+
+        treasuryProposalCount++;
+
+        Proposal storage p = treasuryProposals[liquidityProposalCount];
+        p.id = treasuryProposalCount;
+        p.upgrade = _strategy;
+        p.startBlock = _startBlock;
+        p.endBlock = _endBlock;
+        p.forVotes = 0;
+        p.againstVotes = 0;
+        p.minVotes = getMinRequiredVotes();
+        p.canceled = false;
+        p.executed = false;
+        emit TreasuryProposalCreated(p.id, _startBlock, _endBlock, _strategy);
     }
 
-    function castVoteBySig(uint proposalId, bool support, uint8 v, bytes32 r, bytes32 s) public {
+    function castVote(uint proposalId, bool proposalType, bool support) public {
+        return _castVote(msg.sender, proposalId, proposalType, support);
+    }
+
+    function castVoteBySig(uint proposalId, bool proposalType, bool support, uint8 v, bytes32 r, bytes32 s) public {
         bytes32 domainSeparator = keccak256(abi.encode(DOMAIN_TYPEHASH, keccak256(bytes(name)), getChainId(), address(this)));
         bytes32 structHash = keccak256(abi.encode(BALLOT_TYPEHASH, proposalId, support));
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
         address signatory = ecrecover(digest, v, r, s);
         require(signatory != address(0), "castVoteBySig: invalid signature");
-        return _castVote(signatory, proposalId, support);
+        return _castVote(signatory, proposalId, proposalType, support);
     }
 
-    function _castVote(address voter, uint proposalId, bool support) internal {
-        require(state(proposalId) == ProposalState.Active, "GovernorAlpha::_castVote: voting is closed");
-        Proposal storage proposal = proposals[proposalId];
+    function _castVote(address voter, uint proposalId, bool proposalType, bool support) internal {
+        require(state(proposalId,proposalType) == ProposalState.Active, "GovernorAlpha::_castVote: voting is closed");
+        Proposal storage proposal = (proposalType ? liquidityProposals[proposalId]: treasuryProposals[proposalId]);
         Receipt storage receipt = proposal.receipts[voter];
         require(receipt.hasVoted == false, "_castVote: voter already voted");
-        uint256 votes = JBT.balanceOf(voter);
+        uint256 votes = JCE.balanceOf(voter);
 
         if (support) {
             proposal.forVotes = votes.add(proposal.forVotes);
@@ -203,24 +229,28 @@ contract WDAI is ERC20{
         receipt.hasVoted = true;
         receipt.support = support;
         receipt.votes = votes;
-
-        emit VoteCast(voter, proposalId, support, votes);
+        if(proposalType){
+            emit LiquidityVoteCast(voter, proposalId, support, votes);
+        } else {
+            emit TreasuryVoteCast(voter, proposalId, support, votes);
+        }
+        
     }
 
-    // Min Required Votes to Reject is 51% of the Circulating JBT Token
-    // Subtract the JBT within the LPs
+    // Min Required Votes to Reject is 51% of the Circulating JCE Token
+    // Subtract the JCE within the LPs
     function getMinRequiredVotes() internal view returns(uint256 amt){
         uint256 poolNum = vault.poolInfoCount();
-        uint256 pooledJBTCount = 0;
+        uint256 pooledJCECount = 0;
         for(uint i=0;i<poolNum;i++){
-            pooledJBTCount = pooledJBTCount.add(vault.getPooledJBT(i));
+            pooledJCECount = pooledJCECount.add(vault.getPooledJCE(i));
         }
-        uint JBTSupply = JBT.totalSupply();
-        amt = JBTSupply.sub(pooledJBTCount).mul(51).div(100);
+        uint JCESupply = JCE.totalSupply();
+        amt = JCESupply.sub(pooledJCECount).mul(51).div(100);
     }
 
-    function judgeProposal(uint proposalID) public {
-        Proposal storage p = proposals[proposalID];
+    function judgeProposal(uint proposalId, bool proposalType) public {
+        Proposal storage p = (proposalType ? liquidityProposals[proposalId]: treasuryProposals[proposalId]);
         require(block.timestamp > p.endBlock, 'Proposal Ongoing');
         if((p.forVotes > p.againstVotes) || (p.againstVotes < p.minVotes)){
             lockedLiqCalculator = ILockedLiqCalculator(p.upgrade);
@@ -230,9 +260,14 @@ contract WDAI is ERC20{
         }
     }
 
-    function state(uint proposalId) public view returns (ProposalState) {
-        require(proposalCount >= proposalId && proposalId > 0, "state: invalid proposal id");
-        Proposal storage proposal = proposals[proposalId];
+    function state(uint proposalId, bool proposalType) public view returns (ProposalState) {
+        if(proposalType){
+            require(liquidityProposalCount >= proposalId && proposalId > 0, "state: invalid liquidity proposal id");
+        } else {
+            require(treasuryProposalCount >= proposalId && proposalId > 0, "state: invalid treasury proposal id");
+        }
+        
+        Proposal storage proposal = (proposalType ? liquidityProposals[proposalId]: treasuryProposals[proposalId]);
         if (proposal.canceled) {
             return ProposalState.Canceled;
         } else if (block.number <= proposal.startBlock) {

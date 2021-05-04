@@ -6,13 +6,13 @@ import "./interfaces/IERC20.sol";
 import "./uniswap/IUniswapV2Pair.sol";
 import "./uniswap/IUniswapV2Router02.sol";
 import "./uniswap/IUniswapV2Factory.sol";
-import "./interfaces/IJuiceBookToken.sol";
+import "./interfaces/IJuiceToken.sol";
 import "./Address.sol";
 import "./SafeERC20.sol";
 import "./SafeMath.sol";
 
 //Scaled up by 100: 10000 = 100%
-struct JBTTransferPortalParameters{
+struct JCETransferPortalParameters{
     address dev;
     uint16 devRewardRate;
     uint16 vaultRewardRate;
@@ -24,8 +24,6 @@ contract TransferPortal is ITransferPortal{
     using SafeERC20 for IERC20;
     using SafeMath for uint256;
 
-    address mesaj;
-
     enum AddressState{
         Unknown,
         NotPool,
@@ -33,39 +31,52 @@ contract TransferPortal is ITransferPortal{
         AllowedPool
     }
 
-    modifier mesajOnly(){
-        require (msg.sender == mesaj, "Mesaj only");
+    modifier wardsOnly(){
+        require (wards[msg.sender], "Wards only");
         _;
     }
 
-    JBTTransferPortalParameters public parameters;
+    JCETransferPortalParameters public parameters;
     IUniswapV2Router02 immutable uniswapV2Router;
     IUniswapV2Factory immutable uniswapV2Factory;
-    IJuiceBookToken immutable JBT;
+    IJuiceToken immutable JCE;
 
     mapping (address => AddressState) public addressStates;
     IERC20[] public allowedPoolTokens;
     
     bool public unrestricted;
+    mapping(address => bool) public wards;
     mapping (address => bool) public taxationController;
     mapping (address => bool) public taxation;
     mapping (address => uint256) public liquiditySupply;
-    address public mustUpdate;    
+    address public mustUpdate;
+    address mesaj;
 
-    constructor(IJuiceBookToken _JBT, IUniswapV2Router02 _uniswapV2Router){
+    constructor(IJuiceToken _JCE, IUniswapV2Router02 _uniswapV2Router){
+        wards[msg.sender] = true;
         mesaj = msg.sender;
-        JBT = _JBT;
+        JCE = _JCE;
         uniswapV2Router = _uniswapV2Router;
         uniswapV2Factory = IUniswapV2Factory(_uniswapV2Router.factory());
     }
 
     function allowedPoolTokensCount() public view returns (uint256) { return allowedPoolTokens.length; }
 
-    function setController(address unrestrictedController, bool allow) public mesajOnly(){
+    function setWard(address appointee) public wardsOnly(){
+        require(!wards[appointee], "Appointee is already ward.");
+        wards[appointee] = true;
+    }
+
+    function abdicate(address shame) public wardsOnly(){
+        require(mesaj != shame, "Et tu, Brute?");
+        wards[shame] = false;
+    }
+
+    function setController(address unrestrictedController, bool allow) public wardsOnly(){
         taxationController[unrestrictedController] = allow;
     }
 
-    function noTaxation(address addr, bool isTaxFree) public mesajOnly(){
+    function noTaxation(address addr, bool isTaxFree) public wardsOnly(){
         taxation[addr] = isTaxFree;
     }
 
@@ -74,11 +85,11 @@ contract TransferPortal is ITransferPortal{
         unrestricted = _unrestricted;
     }
 
-    function setParameters(address _dev, address _vault, uint16 _vaultRewardRate, uint16 _devRate) public mesajOnly(){
+    function setParameters(address _dev, address _vault, uint16 _vaultRewardRate, uint16 _devRate) public wardsOnly(){
         require (_dev != address(0) && _vault != address(0));
-        require (_vaultRewardRate <= 500 && _devRate <= 10, "Sanity");
+        require (_vaultRewardRate <= 500 && _devRate <= 10, "Specified Rate(s) Not Allowed");
         
-        JBTTransferPortalParameters memory _parameters;
+        JCETransferPortalParameters memory _parameters;
         _parameters.dev = _dev;
         _parameters.vaultRewardRate = _vaultRewardRate;
         _parameters.devRewardRate = _devRate;
@@ -86,10 +97,10 @@ contract TransferPortal is ITransferPortal{
         parameters = _parameters;
     }
 
-    function allowPool(IERC20 token) public mesajOnly(){
-        address pool = uniswapV2Factory.getPair(address(JBT), address(token));
+    function allowPool(IERC20 token) public wardsOnly(){
+        address pool = uniswapV2Factory.getPair(address(JCE), address(token));
         if (pool == address(0)) {
-            pool = uniswapV2Factory.createPair(address(JBT), address(token));
+            pool = uniswapV2Factory.createPair(address(JCE), address(token));
         }
         AddressState state = addressStates[pool];
         require (state != AddressState.AllowedPool, "Already allowed");
@@ -98,26 +109,26 @@ contract TransferPortal is ITransferPortal{
         liquiditySupply[pool] = IERC20(pool).totalSupply();
     }
 
-    function safeAddLiquidity(IERC20 token, uint256 tokenAmount, uint256 JBTAmount, uint256 minTokenAmount, uint256 minJBTAmount, address to, uint256 deadline) public
-    returns (uint256 JBTUsed, uint256 tokenUsed, uint256 liquidity){
+    function safeAddLiquidity(IERC20 token, uint256 tokenAmount, uint256 JCEAmount, uint256 minTokenAmount, uint256 minJCEAmount, address to, uint256 deadline) public
+    returns (uint256 JCEUsed, uint256 tokenUsed, uint256 liquidity){
 
-        address pool = uniswapV2Factory.getPair(address(JBT), address(token));
+        address pool = uniswapV2Factory.getPair(address(JCE), address(token));
         require (pool != address(0) && addressStates[pool] == AddressState.AllowedPool, "Pool not approved");
         unrestricted = true;
 
         uint256 tokenBalance = token.balanceOf(address(this));
         token.safeTransferFrom(msg.sender, address(this), tokenAmount);
-        JBT.transferFrom(msg.sender, address(this), JBTAmount);
-        JBT.approve(address(uniswapV2Router), JBTAmount);
+        JCE.transferFrom(msg.sender, address(this), JCEAmount);
+        JCE.approve(address(uniswapV2Router), JCEAmount);
         token.safeApprove(address(uniswapV2Router), tokenAmount);
-        (JBTUsed, tokenUsed, liquidity) = uniswapV2Router.addLiquidity(address(JBT), address(token), JBTAmount, tokenAmount, minJBTAmount, minTokenAmount, to, deadline);
+        (JCEUsed, tokenUsed, liquidity) = uniswapV2Router.addLiquidity(address(JCE), address(token), JCEAmount, tokenAmount, minJCEAmount, minTokenAmount, to, deadline);
         liquiditySupply[pool] = IERC20(pool).totalSupply();
         if (mustUpdate == pool) {
             mustUpdate = address(0);
         }
 
-        if (JBTUsed < JBTAmount) {
-            JBT.transfer(msg.sender, JBTAmount - JBTUsed);
+        if (JCEUsed < JCEAmount) {
+            JCE.transfer(msg.sender, JCEAmount - JCEUsed);
         }
         tokenBalance = token.balanceOf(address(this)).sub(tokenBalance);
         if (tokenBalance > 0) {
@@ -156,7 +167,7 @@ contract TransferPortal is ITransferPortal{
             return new TransferPortalTarget[](0);
         }
 
-        JBTTransferPortalParameters memory params = parameters;
+        JCETransferPortalParameters memory params = parameters;
 
         targets = new TransferPortalTarget[]((params.devRewardRate > 0 ? 1 : 0) + (params.vaultRewardRate > 0 ? 1 : 0));
         uint256 index = 0;
@@ -170,7 +181,7 @@ contract TransferPortal is ITransferPortal{
         }
     }
 
-    function setAddressState(address a, AddressState state) public mesajOnly(){
+    function setAddressState(address a, AddressState state) public wardsOnly(){
         addressStates[a] = state;
     }
 
@@ -206,12 +217,12 @@ contract TransferPortal is ITransferPortal{
                 // certainty that we're interacting with a uniswap pair
                 try IUniswapV2Pair(a).token0() returns (address token0)
                 {
-                    if (token0 == address(JBT)) {
+                    if (token0 == address(JCE)) {
                         revert("22");
                     }
                     try IUniswapV2Pair(a).token1() returns (address token1)
                     {
-                        if (token1 == address(JBT)) {
+                        if (token1 == address(JCE)) {
                             revert("22");
                         }                        
                     }
