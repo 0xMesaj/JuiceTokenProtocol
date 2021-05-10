@@ -113,7 +113,7 @@ describe('Juice Protocol Sim', () => {
         await JCEwdai.connect(aThree).approve(uniswap.router.address, constants.MaxUint256);
 
         //DAI Contribution Test
-        console.log("aThree Contributing 10,000,00 DAI to SBGE...")
+        console.log("aThree Contributing 1,000,00 DAI to SBGE...")
         var preDAI = await sbge.daiContribution(aThree.address)
         await sbge.connect(aThree).contributeDAI(utils.parseEther("1000000"));
         var postDAI = await sbge.daiContribution(aThree.address)
