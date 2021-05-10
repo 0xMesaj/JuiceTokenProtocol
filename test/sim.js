@@ -16,7 +16,7 @@ describe('Juice Protocol Sim', () => {
         TransferPortalFactory = await ethers.getContractFactory('TransferPortal');    
         LiqCalculatorFactory = await ethers.getContractFactory("LockedLiqCalculator");  
         SBGEContractFactory = await ethers.getContractFactory('SBGE'); 
-        BookTreasuryFactory = await ethers.getContractFactory('BookTreasury');
+        JuiceTreasuryFactory = await ethers.getContractFactory('JuiceTreasury');
         SportsBookFactory = await ethers.getContractFactory('TestSportsBook');
         BookVaultFactory = await ethers.getContractFactory('BookVault');
         JuiceBookSwapFactory = await ethers.getContractFactory('JuiceBookSwap');
@@ -42,7 +42,7 @@ describe('Juice Protocol Sim', () => {
         //Init Juice Token Transfer Portal
         await JUICEtoken.setTransferPortal(portal.address);
         const SportsBook = await SportsBookFactory.deploy(DAItoken.address); 
-        const JuiceTreasury = await BookTreasuryFactory.deploy(JuiceVault.address, SportsBook.address, DAItoken.address, JUICEtoken.address, BookLiqCalculator.address, uniswap.factory.address, uniswap.router.address)
+        const JuiceTreasury = await JuiceTreasuryFactory.deploy(JuiceVault.address, SportsBook.address, DAItoken.address, JUICEtoken.address, BookLiqCalculator.address, uniswap.factory.address, uniswap.router.address)
         const wDAI = await wDAIContract.deploy(JuiceVault.address, JUICEtoken.address, DAItoken.address, JuiceTreasury.address, uniswap.factory.address, "wDAI", "wDAI");
         const JuiceBookSwap = await JuiceBookSwapFactory.deploy(JUICEtoken.address,wDAI.address,uniswap.router.address)
 
