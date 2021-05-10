@@ -1,11 +1,11 @@
 // pragma solidity >0.4.13 <0.7.7;
 
 
-// import "./SafeMath.sol";
-// import "./strings.sol";
-// import "./interfaces/IERC20.sol";
-// import "./interfaces/IWETH.sol";
-// import "https://raw.githubusercontent.com/smartcontractkit/chainlink/develop/evm-contracts/src/v0.6/ChainlinkClient.sol";
+// import "../SafeMath.sol";
+// import "../strings.sol";
+// import "../interfaces/IERC20.sol";
+// import "../interfaces/IWETH.sol";
+// import "@chainlink/contracts/src/v0.6/ChainlinkClient.sol";
 // pragma experimental ABIEncoderV2;
 
 // /*
@@ -25,16 +25,17 @@
     
 //     event BetRequested(bytes32 betID,bytes16 betRef);
 //     event BetAccepted(bytes16 betRef,uint256 odds);
-//     event BetPayout(bytes32 betID);
-//     event BetPush(bytes32 betID);
-//     event BetRejected(bytes32 betID);
+//     event BetPayout(bytes16 betRef);
+//     event BetPush(bytes16 betRef);
+//     event BetRefunded(bytes16 betRef);
+//     event BetDeleted(bytes16 betRef);
 //     event ParlayAccepted(bytes16 betRef,bytes32 odds);
 //     event ScoreRecorded(uint256 index);
     
 //     struct MatchScores{
 //         string homeScore;
 //         string awayScore;
-//         bool recorded;
+//         uint256 recorded;
 //     }
     
 //     struct Bet{
@@ -91,27 +92,24 @@
 
 //     address oracle;
 //     address mesaj;
+//     address treasury;
 //     int256 MAX_BET;
 //     IERC20 dai;
-//     bool public isOperational;
-//     bool public freeFee;
-//     bool public noNewBets;
+//     bool public isOperational = false;
+//     bool public freeFee = false;
+//     bool public noNewBets = false;
 //     IWETH weth;
-//     address immutable treasury;
 
-//     constructor (IERC20 _DAI, IWETH _WETH, address _treasury) public payable{
+//     constructor (IERC20 _DAI, IWETH _WETH,  address _treasury) public payable{
 //         setPublicChainlinkToken();
 
 //         mesaj = msg.sender;
 //         wards[mesaj] = true;
-//         treasury = _treasury;
         
-//         isOperational = false;
-//         noNewBets = false;
-//         freeFee = false;
 //         oracle = 0x485C2616C104C6de809C2b661B05dfB2fD99fF53;        //CHANGE
 //         dai = _DAI;
 //         weth = _WETH;
+//         treasury = _treasury;
 //     }
     
 //     function resolveMatch( bytes16 _betRef ) public {
@@ -119,6 +117,7 @@
 //         Bet memory b = bets[_betRef];
 //         require(_betRef != 0x0, "Invalid Bet Reference");
 //         require(b.timestamp>matchCancellationTimestamp[b.index], 'Match is invalid');
+//         require(matchResults[b.index].recorded + 604800 > block.timestamp, "Match Results only valid for 1 week");
 
 //         uint256 result = computeResult(b.index,b.selection,b.rule);
 //         //Win
@@ -129,7 +128,7 @@
 
 //             delete bets[_betRef];
 //             uint256 winAmt = amt.mul(odds).div(100);
-//             dai.transfer(creator, winAmt);
+//             dai.transferFrom(treasury,creator,winAmt);
 //             emit BetPayout(_betRef);
 //         }
 //         //Push
@@ -138,7 +137,7 @@
 //             address creator = b.creator;
 
 //             delete bets[_betRef];
-//             dai.transferFrom(address(this),creator, pushAmt);
+//             dai.transferFrom(treasury,creator,pushAmt);
 //             emit BetPush(_betRef);
 //         }
 //     }
@@ -154,6 +153,7 @@
         
 //         bool win = true;
 //         for(uint i = 0; i < os.length; i++){
+//             require(matchResults[p.indexes[i]].recorded + 604800 > block.timestamp, "Match Results only valid for 1 week");
 //             uint ans = computeResult(bytesToUInt(stringToBytes32(p.indexes[i])),bytesToUInt(stringToBytes32(p.selections[i])), p.rules[i]);
 //             if(ans == 0){
 //                 win = false;
@@ -174,7 +174,7 @@
 
 //             delete parlays[_betRef];
 //             uint256 winAmt = amt.mul(odds).div(100);
-//             dai.transferFrom(address(this),creator, winAmt);
+//             dai.transferFrom(treasury,creator, winAmt);
 //             emit BetPayout(_betRef);
 //         }
 //     }
@@ -193,7 +193,7 @@
 //             address refundee = b.creator;
 //             delete bets[_betRef];
 //             dai.transferFrom(treasury,refundee,amt);
-//             emit BetRejected(_betRef);
+//             emit BetRefunded(_betRef);
 //         }
 //     }
 
@@ -216,19 +216,21 @@
 //             uint256 amt = p.amount;
 //             address refundee = p.creator;
 //             delete bets[_betRef];
-//             dai.transferFrom(address(this),refundee,amt);
-//             emit BetRejected(_betRef);
+//             dai.transferFrom(treasury,refundee,amt);
+//             emit BetRefunded(_betRef);
 //         }
 //     }
 
 //     function bet(bytes16 _betRef, uint256 _index, uint256 _selection, uint256 _wagerAmt, int256 _rule ) public payable {
 //         require(isOperational, 'Sports Book not Operational');
 //         require(!noNewBets, 'Sports Book not accepting new wagers');
+//         require(address(bets[_betRef].creator) == address(0x0), 'Are you malicious or are you unlucky?');
+//         require(!banned[_index], "Sports Book not accepting wagers for specified Game ID");
 
 //         bytes32 _queryID = buildBet(_index, _selection, _rule, _wagerAmt);
         
 //         if(_queryID != 0x0){
-//             dai.transferFrom(msg.sender, address(this), _wagerAmt);
+//             dai.transferFrom(msg.sender, treasury, _wagerAmt);
 //             Bet storage b = bets[_betRef];
 //             b.creator = msg.sender;
 //             b.index = _index;
@@ -247,11 +249,12 @@
 //     function betParlay( bytes16 _betRef,uint _wagerAmt, string memory _indexes, string memory _selections,  int[] memory _rules ) public payable{
 //         require(isOperational, 'Sports Book not Operational');
 //         require(!noNewBets, 'Sports Book not accepting new wagers');
+//         require(address(parlays[_betRef].creator) == address(0x0), 'Are you malicious or are you unlucky?');
      
 //         bytes32 _queryID = buildParlay( _indexes, _selections, _rules, _wagerAmt );
 
 //         if(_queryID != 0x0){
-//             dai.transferFrom(msg.sender, address(this), _wagerAmt);
+//             dai.transferFrom(msg.sender, treasury, _wagerAmt);
 //             strings.slice memory s = _indexes.toSlice();
 //             strings.slice memory delim = ",".toSlice();
 //             string[] memory indexes = new string[](s.count(delim) + 1);
@@ -265,6 +268,7 @@
 //             s =  _selections.toSlice();
 //             string[] memory selections = new string[](s.count(delim) + 1);
 //             for(uint i = 0; i < selections.length; i++) {
+//                 require(!banned[s.split(delim).toString()], "Sports Book not accepting wagers for specified Game ID");
 //                 selections[i] = s.split(delim).toString();
 //             }
                 
@@ -292,7 +296,7 @@
 //     function deleteBet(bytes16 _betRef, bool straight) public isWard(){
 //         if(straight){
 //             Bet memory b = bets[_betRef];
-//             require(!matchResults[b.index].recorded, "Match already finalized - Cannot Delete Bet");
+//             require(matchResults[b.index].recorded == 0, "Match already finalized - Cannot Delete Bet");
 //             uint256 amt = b.amount;
 //             address creator = b.creator;
 
@@ -301,7 +305,7 @@
 //         }else{
 //             Parlay memory p = parlays[_betRef];
 //             for(uint i=0;i<p.indexes.length;i++){
-//                 require(!matchResults[uint(stringToBytes32(p.indexes[i]))].recorded, "Match already finalized - Cannot Delete Parlay");
+//                 require(matchResults[uint(stringToBytes32(p.indexes[i]))].recorded == 0, "Match already finalized - Cannot Delete Parlay");
 //             }
 //             uint256 amt = p.amount;
 //             address creator = p.creator;
@@ -333,20 +337,25 @@
 //         freeFee = isFree;
 //     }
 
+//     // Set Ban state for Game ID _subject
+//     function setBan(uint256 _subject, bool _isBanned) public isWard(){
+//         banned[_subject] = _isBanned;
+//     }
+
 //     function setStraightOraclePayment(uint256 amt) public isWard(){
-//         STRAIGHT_ORACLE_PAYMENT = amt * LINK;
+//         STRAIGHT_ORACLE_PAYMENT = amt;
 //     }
     
 //     function setParlayOraclePayment(uint256 amt) public isWard(){
-//         PARLAY_ORACLE_PAYMENT = amt * LINK;
+//         PARLAY_ORACLE_PAYMENT = amt;
 //     }
     
 //     function setScoresOraclePayment(uint256 amt) public isWard(){
-//         SCORES_ORACLE_PAYMENT = amt * LINK;
+//         SCORES_ORACLE_PAYMENT = amt;
 //     }
 
 //     function setStatusOraclePayment(uint256 amt) public isWard(){
-//         STATUS_ORACLE_PAYMENT = amt * LINK;
+//         STATUS_ORACLE_PAYMENT = amt;
 //     }
 
 //     // Returns 1 for win, 2 for push
@@ -488,7 +497,7 @@
 //         MatchScores storage m = matchResults[queriedIDs[_requestId]];
 //         m.homeScore = s.split(",".toSlice(), part).toString();
 //         m.awayScore = s.split(",".toSlice(), part).toString();
-//         m.recorded = true;
+//         m.recorded = block.timestamp;
 //         queriedIndexes[queriedIDs[_requestId]] = false;
 //         emit ScoreRecorded(queriedIDs[_requestId]);
 //         delete queriedIDs[_requestId];

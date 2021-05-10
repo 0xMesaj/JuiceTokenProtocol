@@ -17,8 +17,7 @@ contract WDAI is ERC20{
     using SafeERC20 for IERC20;
     using SafeMath for uint256;
 
-
-    string public constant contract_name = "Book Treasury";
+    string public constant contract_name = "WDAI";
     bytes32 public constant DOMAIN_TYPEHASH = keccak256("EIP712Domain(string name,uint256 chainId,address verifyingContract)");
     bytes32 public constant BALLOT_TYPEHASH = keccak256("Ballot(uint256 proposalId,bool support)");
 
@@ -41,6 +40,7 @@ contract WDAI is ERC20{
     address mesaj;
     IERC20 JCE;
     IJuiceVault vault;
+    bool initialized = false;
 
     struct Proposal {
         uint id;
@@ -93,56 +93,53 @@ contract WDAI is ERC20{
     }
 
     /* Set the address for initial lockedLiqCalculator, cannot be recalled after first execution -
-       Only way to change lockedLiqCalculator is through governance proposals */
+       Only way to change lockedLiqCalculator is through on-chain governance proposals */
     function setLiquidityCalculator(ILockedLiqCalculator _lockedLiqCalculator) external quaestorOnly(){
         require(address(lockedLiqCalculator) == address(0x0), "Function no longer callable after first execution");
         lockedLiqCalculator = _lockedLiqCalculator;
     }
 
-    function promoteQuaestor(address sweeper, bool _isApproved) external quaestorOnly(){
-        quaestor[sweeper] = _isApproved;
+    function promoteQuaestor(address _approvee, bool _isApproved) external quaestorOnly(){
+        quaestor[_approvee] = _isApproved;
     }
 
-    function abdicate(address shame) public{
-        require(mesaj != shame, "Et tu, Brute?");
-        require (quaestor[msg.sender], "Error: Quaestors only");
-        treasurers[shame] = false;
+    function abdicate(address _shame) public quaestorOnly(){
+        require(mesaj != _shame, "Et tu, Brute?");
+        treasurers[_shame] = false;
     }
 
     function designateTreasury(address _treasury, bool _isApproved) external quaestorOnly(){
-        require (quaestor[msg.sender], "Error: Quaestors only");
+        require(!initialized, "Function no longer callable after first execution");
         treasury[_treasury] = _isApproved;
+        initialized = true;
     }
 
-    function initializeTreasuryBalance(address to) public{
-        require (treasury[to], "Error: Destination Address Not Approved Treasury");
-        require (quaestor[msg.sender], "Error: Quaestors only");
+    function initializeTreasuryBalance(address _to) public quaestorOnly(){
+        require (treasury[_to], "Error: Destination Address Not Approved Treasury");
         
         uint256 fundAmount = lockedLiqCalculator.calculateLockedwDAI(wrappedToken, address(this));
-        IJuiceVault(to).initializeTreasury(fundAmount);
+        IJuiceVault(_to).initializeTreasury(fundAmount);
         if (fundAmount > 0) {
-            wrappedToken.transferFrom(address(this),to, fundAmount);
+            wrappedToken.transferFrom(address(this), _to, fundAmount);
         }
     }
 
-    function fund(address to) public returns (uint256 fundAmount){
-        require (treasury[to], "Error: Destination Address Not Approved Treasury");
-        require (quaestor[msg.sender], "Error: Quaestors only");
+    function fund(address _to) public quaestorOnly() returns (uint256 fundAmount){
+        require (treasury[_to], "Error: Destination Address Not Approved Treasury");
         fundAmount = lockedLiqCalculator.calculateLockedwDAI(wrappedToken, address(this));
 
         if (fundAmount > 0) {
-            wrappedToken.transferFrom(address(this),to, fundAmount);
+            wrappedToken.transferFrom(address(this), _to, fundAmount);
         }
     }
 
-    function fundAmt(address to, uint256 amt) public {
-        require (treasury[to], "Error: Destination Address Not Approved Treasury");
-        require (quaestor[msg.sender], "Error: Quaestors only");
+    function fundAmt(address _to, uint256 _amt) public quaestorOnly(){
+        require (treasury[_to], "Error: Destination Address Not Approved Treasury");
         uint256 freeableDAI = lockedLiqCalculator.calculateLockedwDAI(wrappedToken, address(this));
-        require(freeableDAI > amt, "Error: Requested Funding Amount Greater Than Freeable DAI");
+        require(freeableDAI > _amt, "Error: Requested Funding Amount Greater Than Freeable DAI");
 
-        if (amt > 0) {
-            wrappedToken.transferFrom(address(this), to, amt);
+        if (_amt > 0) {
+            wrappedToken.transferFrom(address(this), _to, _amt);
         }
     }
 
@@ -160,8 +157,7 @@ contract WDAI is ERC20{
         emit Withdrawal(msg.sender, _amount);
     }  
 
-    function proposeLiquidityStrategy(address _strategy) public {
-        require (quaestor[msg.sender], "Error: Quaestors only");
+    function proposeLiquidityStrategy(address _strategy) public quaestorOnly(){
         uint _startBlock = block.number;
         uint _endBlock = _startBlock.add(5760);
 
@@ -180,8 +176,7 @@ contract WDAI is ERC20{
         emit LiquidityProposalCreated(p.id, _startBlock, _endBlock, _strategy);
     }
 
-    function proposeTreasuryStrategy(address _strategy) public {
-        require (quaestor[msg.sender], "Error: Quaestors only");
+    function proposeTreasuryStrategy(address _strategy) public quaestorOnly(){
         uint _startBlock = block.number;
         uint _endBlock = _startBlock.add(5760);
 
@@ -252,9 +247,15 @@ contract WDAI is ERC20{
     function judgeProposal(uint proposalId, bool proposalType) public {
         Proposal storage p = (proposalType ? liquidityProposals[proposalId]: treasuryProposals[proposalId]);
         require(block.timestamp > p.endBlock, 'Proposal Ongoing');
-        if((p.forVotes > p.againstVotes) || (p.againstVotes < p.minVotes)){
-            lockedLiqCalculator = ILockedLiqCalculator(p.upgrade);
-            p.executed = true;
+        if((p.forVotes > p.againstVotes) || (p.minVotes > p.againstVotes)){
+            if(proposalType){
+                treasury[p.upgrade] = true;
+                p.executed = true;
+            }else{
+                lockedLiqCalculator = ILockedLiqCalculator(p.upgrade);
+                p.executed = true;
+            }
+
         }else{
             p.canceled = true;
         }
@@ -276,7 +277,7 @@ contract WDAI is ERC20{
             return ProposalState.Active;
         } else if (proposal.forVotes <= proposal.againstVotes) {
             return ProposalState.Defeated;
-        } else if (proposal.forVotes <= proposal.againstVotes) {
+        } else if (proposal.forVotes >= proposal.againstVotes || proposal.forVotes < proposal.minVotes) {
             return ProposalState.Succeeded;
         } 
     }

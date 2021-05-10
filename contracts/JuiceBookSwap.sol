@@ -47,15 +47,15 @@ contract JuiceBookSwap {
         uint256 post_wdaiBalance = wdai.balanceOf(address(this));
         require(post_wdaiBalance == (amt.add(pre_wdaiBalance)), "Error: Wrap");
 
-        uint256 pre_JBTBalance = JCE.balanceOf(address(this));
+        uint256 pre_JCEBalance = JCE.balanceOf(address(this));
         address[] memory path = new address[](2);
         path[0] = address(wdai);
         path[1] = address(JCE);
         router.swapExactTokensForTokensSupportingFeeOnTransferTokens(amt, 0, path, address(this), block.timestamp);
-        uint256 post_JBTBalance = JCE.balanceOf(address(this));
-        require(post_JBTBalance > pre_JBTBalance, "Error: Swap");
-        uint256 JBTAmt = post_JBTBalance.sub(pre_JBTBalance);
-        JCE.transfer(msg.sender, JBTAmt);
+        uint256 post_JCEBalance = JCE.balanceOf(address(this));
+        require(post_JCEBalance > pre_JCEBalance, "Error: Swap");
+        uint256 JCEAmt = post_JCEBalance.sub(pre_JCEBalance);
+        JCE.transfer(msg.sender, JCEAmt);
     }
 
     function sellJCEforDAI(uint256 amt) public {

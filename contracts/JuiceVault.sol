@@ -96,8 +96,8 @@ contract JuiceVault{
         return user.amountStaked.mul(accRewardPerShare).div(1e12).sub(user.rewardDebt);
     }
 
-    function getPooledJBT(uint256 _poolID) public view returns(uint256 pooledJBT) {
-        pooledJBT = rewardToken.balanceOf(address(poolInfo[_poolID].token));
+    function getPooledJCE(uint256 _poolID) public view returns(uint256 pooledJCE) {
+        pooledJCE = rewardToken.balanceOf(address(poolInfo[_poolID].token));
     }
 
     function massUpdatePools() public {

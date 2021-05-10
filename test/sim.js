@@ -78,14 +78,14 @@ describe('Juice Protocol Sim', () => {
         const wethBal = await weth.balanceOf(lpMan.address)
         await uniswap.router.connect(lpMan).addLiquidity(weth.address,uniswap.wbtc.address,wethBal,wbtcBal,0,0,lpMan.address,2e9)
 
-        //Transfer Total BOOK Supply to SBGE
+        //Transfer Total JCE Supply to SBGE
         await JUICEtoken.connect(owner).transfer(sbge.address, utils.parseEther("28000000"));
 
         await sbge.connect(owner).setupJCEwdai();
         const JCEwdai = uniswap.pairFor(await uniswap.factory.getPair(wDAI.address, JUICEtoken.address));
 
         await portal.connect(owner).allowPool(wDAI.address);
-        await portal.connect(owner).setController(sbge.address, true);
+        await portal.connect(owner).setWard(sbge.address);
 
         // Activate SBGE
         await uniswap.wbtc.approve(sbge.address, constants.MaxUint256, { from: owner.address });
@@ -117,7 +117,7 @@ describe('Juice Protocol Sim', () => {
         var preDAI = await sbge.daiContribution(aThree.address)
         await sbge.connect(aThree).contributeDAI(utils.parseEther("1000000"));
         var postDAI = await sbge.daiContribution(aThree.address)
-        console.log("Contribution Successful... New Contribution: " + (postDAI/10e17).toFixed(2) + " ... Old Contribution: " + (preDAI/10e17).toFixed(2))
+        console.log("Contribution Successful... New Contribution: " + (postDAI/10 ** 18).toFixed(2) + " ... Old Contribution: " + (preDAI/10 ** 18).toFixed(2))
         console.log("---------------------------")
         expect(await sbge.daiContribution(aThree.address)).to.equal(utils.parseEther("1000000"));
 
@@ -125,14 +125,14 @@ describe('Juice Protocol Sim', () => {
         preDAI = await sbge.daiContribution(aFour.address)
         await sbge.connect(aFour).contributeDAI(utils.parseEther("100000"));
         postDAI = await sbge.daiContribution(aFour.address)
-        console.log("Contribution Successful... New Contribution: " + (postDAI/10e17).toFixed(2) + " ... Old Contribution: " + (preDAI/10e17).toFixed(2))
+        console.log("Contribution Successful... New Contribution: " + (postDAI/10 ** 18).toFixed(2) + " ... Old Contribution: " + (preDAI/10 ** 18).toFixed(2))
         console.log("---------------------------")
 
         console.log("aFour Contributing 100,000 DAI to SBGE...")
         preDAI = await sbge.daiContribution(aFour.address)
         await sbge.connect(aFour).contributeDAI(utils.parseEther("100000"));
         postDAI = await sbge.daiContribution(aFour.address)
-        console.log("Contribution Successful... New Contribution: " + (postDAI/10e17).toFixed(2) + " ... Old Contribution: " + (preDAI/10e17).toFixed(2))
+        console.log("Contribution Successful... New Contribution: " + (postDAI/10 ** 18).toFixed(2) + " ... Old Contribution: " + (preDAI/10 ** 18).toFixed(2))
         console.log("---------------------------")
         expect(await sbge.daiContribution(aFour.address)).to.equal(utils.parseEther("200000"));
 
@@ -140,7 +140,7 @@ describe('Juice Protocol Sim', () => {
         preDAI = await sbge.daiContribution(aFive.address)
         await sbge.connect(aFive).contributeDAI(utils.parseEther("300000"));
         postDAI = await sbge.daiContribution(aFive.address)
-        console.log("Contribution Successful... New Contribution: " + (postDAI/10e17).toFixed(2) + " ... Old Contribution: " + (preDAI/10e17).toFixed(2))
+        console.log("Contribution Successful... New Contribution: " + (postDAI/10 ** 18).toFixed(2) + " ... Old Contribution: " + (preDAI/10 ** 18).toFixed(2))
         console.log("---------------------------")
         expect(await sbge.daiContribution(aFive.address)).to.equal(utils.parseEther("300000"));
 
@@ -149,7 +149,7 @@ describe('Juice Protocol Sim', () => {
         var preETH = await sbge.daiContribution(ethMan.address)
         await ethMan.sendTransaction({ to: sbge.address, value: utils.parseEther("2") })
         var postETH = await sbge.daiContribution(ethMan.address)
-        console.log("Contribution Successful... New Contribution: " + (postETH/10e17).toFixed(2) + " ... Old Contribution: " + (preETH/10e17).toFixed(2))
+        console.log("Contribution Successful... New Contribution: " + (postETH/10 ** 18).toFixed(2) + " ... Old Contribution: " + (preETH/10 ** 18).toFixed(2))
         console.log("---------------------------")
 
         //WETH Contribution Test
@@ -157,7 +157,7 @@ describe('Juice Protocol Sim', () => {
         var preWETH = await sbge.daiContribution(mesaj.address)
         await sbge.connect(mesaj).contributeToken(weth.address, utils.parseEther("2"));
         var postWETH = await sbge.daiContribution(mesaj.address)
-        console.log("Contribution Successful... New Contribution: " + (postWETH/10e17).toFixed(2) + " ... Old Contribution: " + (preWETH/10e17).toFixed(2))
+        console.log("Contribution Successful... New Contribution: " + (postWETH/10 ** 18).toFixed(2) + " ... Old Contribution: " + (preWETH/10 ** 18).toFixed(2))
         console.log("---------------------------")
         
         // wrap 30k DAI into wDAI
@@ -169,15 +169,15 @@ describe('Juice Protocol Sim', () => {
 
         //SBGE Contributors claim LP tokens and JCE
         await sbge.connect(aThree).claim();
-        console.log("aThree Claims Shares ... New Balance: " + (await JUICEtoken.balanceOf(aThree.address)/10e17).toFixed(2) + " Juice Token and " + (await JCEwdai.balanceOf(aThree.address)/10e17).toFixed(2) + " LP Token")
+        console.log("aThree Claims Shares ... New Balance: " + (await JUICEtoken.balanceOf(aThree.address)/10 ** 18).toFixed(2) + " Juice Token and " + (await JCEwdai.balanceOf(aThree.address)/10 ** 18).toFixed(2) + " LP Token")
         await sbge.connect(aFour).claim();
-        console.log("aFour Claims Shares ... New Balance: " + (await JUICEtoken.balanceOf(aFour.address)/10e17).toFixed(2) + " Juice Token and " + (await JCEwdai.balanceOf(aFour.address)/10e17).toFixed(2) + " LP Token")
+        console.log("aFour Claims Shares ... New Balance: " + (await JUICEtoken.balanceOf(aFour.address)/10 ** 18).toFixed(2) + " Juice Token and " + (await JCEwdai.balanceOf(aFour.address)/10 ** 18).toFixed(2) + " LP Token")
         await sbge.connect(aFive).claim();
-        console.log("aFive Claims Shares ... New Balance: " + (await JUICEtoken.balanceOf(aFive.address)/10e17).toFixed(2) + " Juice Token and " + (await JCEwdai.balanceOf(aFive.address)/10e17).toFixed(2) + " LP Token")
+        console.log("aFive Claims Shares ... New Balance: " + (await JUICEtoken.balanceOf(aFive.address)/10 ** 18).toFixed(2) + " Juice Token and " + (await JCEwdai.balanceOf(aFive.address)/10 ** 18).toFixed(2) + " LP Token")
         await sbge.connect(ethMan).claim();
-        console.log("ethMan Claims Shares ... New Balance: " + (await JUICEtoken.balanceOf(ethMan.address)/10e17).toFixed(2) + " Juice Token and " + (await JCEwdai.balanceOf(ethMan.address)/10e17).toFixed(2) + " LP Token")
+        console.log("ethMan Claims Shares ... New Balance: " + (await JUICEtoken.balanceOf(ethMan.address)/10 ** 18).toFixed(2) + " Juice Token and " + (await JCEwdai.balanceOf(ethMan.address)/10 ** 18).toFixed(2) + " LP Token")
         await sbge.connect(mesaj).claim();
-        console.log("mesaj Claims Shares ... New Balance: " + (await JUICEtoken.balanceOf(mesaj.address)/10e17).toFixed(2) + " Juice Token and " + (await JCEwdai.balanceOf(mesaj.address)/10e17).toFixed(2) + " LP Token")
+        console.log("mesaj Claims Shares ... New Balance: " + (await JUICEtoken.balanceOf(mesaj.address)/10 ** 18).toFixed(2) + " Juice Token and " + (await JCEwdai.balanceOf(mesaj.address)/10 ** 18).toFixed(2) + " LP Token")
   
         //Buy JUICE with wDAI
         await uniswap.router.connect(aTwo).swapExactTokensForTokensSupportingFeeOnTransferTokens(utils.parseEther("10000"), 0, [wDAI.address, JUICEtoken.address], aTwo.address, 2e9);
@@ -208,7 +208,7 @@ describe('Juice Protocol Sim', () => {
         await JUICEtoken.connect(aTwo).transfer(aFive.address, await JUICEtoken.balanceOf(aTwo.address))
 
         //Test JUICE Swap
-        await portal.connect(owner).noTaxation(JuiceBookSwap.address,true)
+        await portal.connect(owner).noTax(JuiceBookSwap.address,true)
         await DAItoken.connect(owner).mint(owner.address, utils.parseEther("10000000"))
         console.log("---------------------------")
         console.log("Testing JuiceBook Swap Functionality...")
@@ -216,21 +216,21 @@ describe('Juice Protocol Sim', () => {
         var preCheck = await JUICEtoken.balanceOf(owner.address)
         await JuiceBookSwap.connect(owner).buyJCEwithDAI(utils.parseEther("10000"))
         var postCheck = await JUICEtoken.balanceOf(owner.address)
-        console.log("New JCE Balance: " + (postCheck/10e17).toFixed(2) + " Old JCE Balance: " + (preCheck/10e17).toFixed(2))
+        console.log("New JCE Balance: " + (postCheck/10 ** 18).toFixed(2) + " Old JCE Balance: " + (preCheck/10 ** 18).toFixed(2))
         console.log("Selling 10,000 JCE For DAI")
         preCheck = await DAItoken.balanceOf(owner.address)
         await JuiceBookSwap.connect(owner).sellJCEforDAI(utils.parseEther("10000"))
         postCheck = await DAItoken.balanceOf(owner.address)
-        console.log("New DAI Balance: " + (postCheck/10e17).toFixed(2) + " Old DAI Balance: " + (preCheck/10e17).toFixed(2))
+        console.log("New DAI Balance: " + (postCheck/10 ** 18).toFixed(2) + " Old DAI Balance: " + (preCheck/10 ** 18).toFixed(2))
         console.log("---------------------------")
 
         //Pending rewards for LP'ers should not be 0 after JCE trades have occured
         expect(await JuiceVault.pendingReward(0,aThree.address)).to.not.equal(0);
 
         // var reward = await JuiceVault.pendingReward(0,aThree.address)
-        // console.log("aThree Pending Reward=" + (reward/10e17).toFixed(2))
+        // console.log("aThree Pending Reward=" + (reward/10 ** 18).toFixed(2))
 
-        // aThree Withdraws from Vault - Should receive Book Token Reward
+        // aThree Withdraws from Vault - Should receive Juice Token Reward
         const pre = await JUICEtoken.balanceOf(aThree.address);
         await JuiceVault.connect(aThree).withdraw(0,await JCEwdai.balanceOf(aThree.address)); //should receive some JCE reward when they withdraw
         const post = await JUICEtoken.balanceOf(aThree.address);
@@ -253,16 +253,17 @@ describe('Juice Protocol Sim', () => {
 
         //Check SafeAddLiquidity Function in Transfer Portal
         const check1 = await JCEwdai.balanceOf(aThree.address)
-        // console.log(parseInt(check1._hex))
-        await portal.connect(aThree).safeAddLiquidity(wDAI.address, 1000, (1000*WDAIbalance/JCEbalance).toFixed(0),0,0,aThree.address,2e9)
+        //Multiply wDAI amt by current JCE price (WDAIbal/JCEbal) to get JCE amt to contribute
+        await portal.connect(aThree).safeAddLiquidity(wDAI.address, utils.parseEther(""+50000), utils.parseEther(""+(50000*WDAIbalance/JCEbalance).toFixed(0)),0,0,aThree.address,2e9)
         const check2 = await JCEwdai.balanceOf(aThree.address)
         expect(check1).to.not.equal(check2);
-        console.log("Successful liquidity addition through transfer portal... " + (check2-check1) + " LP Tokens Sent to aThree")
+        console.log("Successful liquidity addition through transfer portal... " + ((check2-check1)/10 ** 18).toFixed(2) + " LP Tokens Sent to aThree")
 
         //Send accessible DAI liquidity to Treasury
         await wDAI.connect(owner).initializeTreasuryBalance(JuiceTreasury.address)
         const final = await DAItoken.balanceOf(JuiceTreasury.address)
-        console.log("Final Juice Treasury DAI Token Balance (Funding for Sports Book):"+(final/10e17).toFixed(2))
+        console.log("Final Juice Treasury DAI Token Balance (Funding for Sports Book):"+(final/10 ** 18).toFixed(2))
+
     }); 
 
   

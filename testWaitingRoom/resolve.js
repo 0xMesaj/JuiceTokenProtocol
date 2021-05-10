@@ -2,7 +2,8 @@ const { expect } = require('chai');
 const { ethers } = require('hardhat');
 const { utils, constants } = require("ethers");
 
-// Use the TestResolve Smart Contract to test Logic of wager resolution, including edge cases
+// Use the TestResolve Smart Contract to test Logic of wager resolution used in Sports Book,
+// including edge cases
 
 describe('Test Wager Resolutions', () => {
     let  SportsBook, owner, addr1, addr2;

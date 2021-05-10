@@ -15,19 +15,15 @@ import './uniswap/libraries/TransferHelper.sol';
 import "./uniswap/IUniswapV2Router02.sol";
 import './uniswap/libraries/UniswapV2Library.sol';
 
-import 'hardhat/console.sol';
-
-
 /*
-    Sports Book Generation Contract - Once activated this contract will gather liquidity from
-    contributors. Once completed this contract will initialize the BOOK-wDAI and wDAI-DAI UNI LPs.
-    This contract will then use a portion of the liquidity generated to market buy BOOK
-    Token to be distributed to the contributors, which will be at the floor price of BOOK. This is to prevent 
+    Sports Book Generation Event (SBGE) Contract - Once activated this contract will gather liquidity from
+    contributors. Once completed this contract will initialize the JCE-wDAI and wDAI-DAI UNI LPs.
+    This contract will then use a portion of the liquidity generated to market buy JCE
+    Token to be distributed to the contributors, which will be at the floor price of JCE. This is to prevent 
     greedy bots and instead SBGE contributors are in at the floor price.
 
-    This contract accepts many different forms of contributions: DAI, ETH, Uniswap or Sushiswap LP
-    Tokens, or any token that this contract can be flash swapped for DAI on Uniswap. All contributions will
-    be denominated in DAI. LP tokens are unwrapped and the underlying tokens are sold for DAI.
+    This contract accepts many different forms of contributions: DAI, ETH,, or any token that this contract can be flash swapped
+    for DAI on Uniswap. All contributions will be denominated in DAI. LP tokens are unwrapped and the underlying tokens are sold for DAI.
 */
 
 contract SBGE {
@@ -35,6 +31,7 @@ contract SBGE {
     
     mapping (address => uint256) public daiContribution;
 
+    event NewContribution(uint256 DAIamt, address from);
     event Contribution(uint256 DAIamt, address from);
 
     uint256 public totalDAIContribution = 0; 
@@ -88,10 +85,9 @@ contract SBGE {
 
         JCE = _JCE;
         // DAI = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
-        // WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;   //REAL WETH ADDR
+        // WETH = IWETH(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);   //REAL WETH ADDR
         WETH = _WETH; // FAKE WETH ADDR
         // uniswapFactory = 0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f;
-        // sushiswapFactory = 0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac;
         mesaj = msg.sender;
 
         uniswapV2Router = _uniswapV2Router;
@@ -110,7 +106,7 @@ contract SBGE {
 
     function activate() public isMesaj(){
         require (!isActive && contributors.length == 0 && block.timestamp >= refundsAllowedUntil, "Already activated");
-        require (JCE.balanceOf(address(this)) == JCE.totalSupply(), "Total token supply required to activate SBGE");
+        require (JCE.balanceOf(address(this)) == JCE.totalSupply(), "Total Juice token supply required to activate SBGE");
 
         isActive = true;
     }
@@ -136,13 +132,17 @@ contract SBGE {
     function contributeDAI( uint256 _amount ) external payable active(){
         require(_amount > 0, "Contribution amount must be greater than 0");
         uint256 oldContribution = daiContribution[msg.sender];
+
+        dai.transferFrom(msg.sender, address(this), _amount);
+        totalDAIContribution = totalDAIContribution.add(_amount);
+        daiContribution[msg.sender] = daiContribution[msg.sender].add(_amount);
+        require(daiContribution[msg.sender] > oldContribution, "No new contribution added.");
         if (oldContribution == 0) {
             contributors.push(msg.sender);
+            emit NewContribution(_amount, msg.sender);
+        }else{
+            emit Contribution(_amount, msg.sender);
         }
-        dai.transferFrom(msg.sender, address(this), _amount);
-        totalDAIContribution += _amount;
-        daiContribution[msg.sender] += _amount;
-        emit Contribution(_amount, msg.sender);
     }
 
     // ERC20 Token Contribution
@@ -150,19 +150,53 @@ contract SBGE {
         require(_amount > 0, "Contribution amount must be greater than 0");
         uint256 oldContribution = daiContribution[msg.sender];
 
-        if (oldContribution == 0 ) {
-            contributors.push(msg.sender);
-        }
-
         uint256 balanceDAIOld = IERC20(dai).balanceOf(address(this));
         uint256 amountOut = sellTokenForDAI(_token, _amount);
         uint256 balanceDAINew = IERC20(dai).balanceOf(address(this));
         require(balanceDAIOld < balanceDAINew, "DAI Received From Sale Insufficient");
-        totalDAIContribution += amountOut;
+        totalDAIContribution = totalDAIContribution.add(amountOut);
         daiContribution[msg.sender] = daiContribution[msg.sender].add(amountOut);
-        emit Contribution(amountOut, msg.sender);
-     
         require(daiContribution[msg.sender] > oldContribution, "No new contribution added.");
+
+        if (oldContribution == 0 ) {
+            contributors.push(msg.sender);
+            emit NewContribution(_amount, msg.sender);
+        } else{
+            emit Contribution(amountOut, msg.sender);
+        } 
+    }
+    
+    //ETH contribution
+    receive() external payable active(){
+        require(msg.value > 0, 'Value must me greater than 0');
+        uint256 oldContribution = daiContribution[msg.sender];
+
+        uint256 oldBalance = WETH.balanceOf(address(this));
+        WETH.deposit{value : msg.value}();
+        uint256 newBalance = WETH.balanceOf(address(this));
+        require(newBalance > oldBalance, 'No wETH received from wrap');
+
+        uint256 wETHamt = newBalance.sub(oldBalance);
+
+        uint256 preDAIBalance = dai.balanceOf(address(this));
+        address[] memory path = new address[](2);
+        path[0] = address(WETH);
+        path[1] = address(dai);
+        uniswapV2Router.swapExactTokensForTokens(wETHamt, 0, path, address(this), block.timestamp);
+        uint256 postDAIBalance = dai.balanceOf(address(this));
+        require(postDAIBalance > preDAIBalance, "Error: Swap");
+        uint256 amountOut = postDAIBalance.sub(preDAIBalance);
+
+        require(amountOut > 0, 'No DAI received from sale');
+        totalDAIContribution = totalDAIContribution.add(amountOut);
+        daiContribution[msg.sender] = daiContribution[msg.sender].add(amountOut);
+        require(daiContribution[msg.sender] > oldContribution, "No new contribution added.");
+        if ( oldContribution == 0 ) {
+            contributors.push(msg.sender);
+            emit NewContribution(amountOut, msg.sender);
+        }else{
+            emit Contribution(amountOut, msg.sender);
+        }
     }
 
     //Swap token to DAI
@@ -199,36 +233,7 @@ contract SBGE {
         amountOut = numerator / denominator;
     }
 
-    //ETH contribution
-    receive() external payable active(){
-        require(msg.value > 0, 'Value must me greater than 0');
-        uint256 oldContribution = daiContribution[msg.sender];
-        if ( oldContribution == 0 ) {
-            contributors.push(msg.sender);
-        }
-        uint256 oldBalance = WETH.balanceOf(address(this));
-        WETH.deposit{value : msg.value}();
-        uint256 newBalance = WETH.balanceOf(address(this));
-        require(newBalance > oldBalance, 'No wETH received from wrap');
-
-        uint256 wETHamt = newBalance.sub(oldBalance);
-
-        uint256 preDAIBalance = dai.balanceOf(address(this));
-        address[] memory path = new address[](2);
-        path[0] = address(WETH);
-        path[1] = address(dai);
-        uniswapV2Router.swapExactTokensForTokens(wETHamt, 0, path, address(this), block.timestamp);
-        uint256 postDAIBalance = dai.balanceOf(address(this));
-        require(postDAIBalance > preDAIBalance, "Error: Swap");
-        uint256 amountOut = postDAIBalance.sub(preDAIBalance);
-
-        require(amountOut > 0, 'No DAI received from sale');
-        totalDAIContribution += amountOut;
-        daiContribution[msg.sender] += amountOut;
-        emit Contribution(amountOut, msg.sender);
-    }
-
-    function setupJCEwdai() public isMesaj() {
+    function setupJCEwdai() external isMesaj() {
         JCEwdai = IUniswapV2Pair(uniswapV2Factory.getPair(address(wdai), address(JCE)));
         if (address(JCEwdai) == address(0)) {
             JCEwdai = IUniswapV2Pair(uniswapV2Factory.createPair(address(wdai), address(JCE)));
@@ -271,10 +276,10 @@ contract SBGE {
         //Wrap half allocated DAI liquidity into wDAI
         wdai.deposit(totalDAI.mul(daiPoolPercent).div(20000));
         
-        //Deposit wDAI/DAI at 1:1 ratio - use same wDAI balance as parameter to ensure 1:1
+        //Deposit DAI/wDAI at 1:1 ratio - use same wDAI balance as parameter to ensure 1:1 (not a mistake)
         (,,totalDAIwdai) = uniswapV2Router.addLiquidity(address(dai), address(wdai), wdai.balanceOf(address(this)), wdai.balanceOf(address(this)), 0, 0, address(this), block.timestamp);
 
-        //Transfer wDAI-DAI LP Tokens to Treasury
+        //Transfer DAI-wDAI LP Tokens to Juice Treasury
         IERC20(uniswapV2Factory.getPair(address(dai), address(wdai))).transfer(address(treasury),totalDAIwdai);
     }
 
@@ -282,8 +287,8 @@ contract SBGE {
         // Create WDAI/JCE Liquidity Pool
         wdai.deposit(totalDAI.mul(poolPercent).div(10000));
 
-        (,,totalJCEwdai) = uniswapV2Router.addLiquidity(address(wdai), address(JCE), wdai.balanceOf(address(this)), JCE.totalSupply(), 0, 0, address(this), block.timestamp);
-        lpToken = IERC20(uniswapV2Factory.getPair(address(wdai), address(JCE)));
+        (,,totalJCEwdai) = uniswapV2Router.addLiquidity(address(JCE),address(wdai), JCE.totalSupply(), wdai.balanceOf(address(this)), 0, 0, address(this), block.timestamp);
+        lpToken = IERC20(uniswapV2Factory.getPair(address(JCE),address(wdai)));
     }
 
     function claim() public{

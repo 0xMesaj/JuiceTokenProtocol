@@ -68,12 +68,6 @@ contract JuiceToken is ERC20{
         require (treasurers[msg.sender], "Treasurers only");
         _;
     }
-    
-    modifier mesajOnly(){
-        require (msg.sender == mesaj, "Mesaj only");
-        _;
-    }
-
 
     constructor( string memory _name, string memory _symbol ) ERC20(_name,_symbol) {
         mesaj = msg.sender;
@@ -143,16 +137,16 @@ contract JuiceToken is ERC20{
         emit VoteCast(voter, proposalId, support, votes);
     }
 
-    // Min Required Votes to Reject is 51% of the Circulating JBT
-    // Subtract the JBT within the LPs
+    // Min Required Votes to Reject is 51% of the Circulating JCE
+    // Subtract the JCE within the LPs
     function getMinRequiredVotes() internal view returns(uint256 amt){
         uint256 poolNum = vault.poolInfoCount();
         uint256 pooledJCECount = 0;
         for(uint i=0;i<poolNum;i++){
             pooledJCECount = pooledJCECount.add(vault.getPooledJCE(i));
         }
-        uint JBTSupply = totalSupply;
-        amt = JBTSupply.sub(pooledJCECount).mul(51).div(100);
+        uint JCESupply = totalSupply;
+        amt = JCESupply.sub(pooledJCECount).mul(51).div(100);
     }
 
     function judgeProposal(uint proposalID) public {
@@ -168,7 +162,8 @@ contract JuiceToken is ERC20{
     }
 
     //Set Initial Transfer Portal address, only callable once
-    function setTransferPortal(ITransferPortal _transferPortal) external mesajOnly(){
+    function setTransferPortal(ITransferPortal _transferPortal) external {
+        require (msg.sender == mesaj, "Mesaj only");
         require(address(transferPortal) == address(0x0), "Transfer Portal Already Initiailized");
         transferPortal = _transferPortal;
     }

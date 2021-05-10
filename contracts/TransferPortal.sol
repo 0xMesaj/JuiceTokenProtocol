@@ -46,8 +46,7 @@ contract TransferPortal is ITransferPortal{
     
     bool public unrestricted;
     mapping(address => bool) public wards;
-    mapping (address => bool) public taxationController;
-    mapping (address => bool) public taxation;
+    mapping (address => bool) public taxFree;
     mapping (address => uint256) public liquiditySupply;
     address public mustUpdate;
     address mesaj;
@@ -72,21 +71,16 @@ contract TransferPortal is ITransferPortal{
         wards[shame] = false;
     }
 
-    function setController(address unrestrictedController, bool allow) public wardsOnly(){
-        taxationController[unrestrictedController] = allow;
+    function noTax(address addr, bool isTaxFree) public wardsOnly(){
+        taxFree[addr] = isTaxFree;
     }
 
-    function noTaxation(address addr, bool isTaxFree) public wardsOnly(){
-        taxation[addr] = isTaxFree;
-    }
-
-    function setFreeTransfers(bool _unrestricted) public {
-        require (taxationController[msg.sender], "Only callable by tax controllers");
+    function setFreeTransfers(bool _unrestricted) public wardsOnly(){
         unrestricted = _unrestricted;
     }
 
     function setParameters(address _dev, address _vault, uint16 _vaultRewardRate, uint16 _devRate) public wardsOnly(){
-        require (_dev != address(0) && _vault != address(0));
+        require (_dev != address(0) && _vault != address(0), "Invalid Addresse(s)");
         require (_vaultRewardRate <= 500 && _devRate <= 10, "Specified Rate(s) Not Allowed");
         
         JCETransferPortalParameters memory _parameters;
@@ -138,10 +132,9 @@ contract TransferPortal is ITransferPortal{
         unrestricted = false;
     }
 
-    function handleTransfer(address, address from, address to, uint256 amount) external override
-        returns (TransferPortalTarget[] memory targets){
-            
+    function handleTransfer(address, address from, address to, uint256 amount) external override returns (TransferPortalTarget[] memory targets){
         address mustUpdateAddress = mustUpdate;
+        
         if (mustUpdateAddress != address(0)) {
             mustUpdate = address(0);
             liquiditySupply[mustUpdateAddress] = IERC20(mustUpdateAddress).totalSupply();
@@ -155,7 +148,7 @@ contract TransferPortal is ITransferPortal{
             require (unrestricted || (fromState != AddressState.DisallowedPool && toState != AddressState.DisallowedPool), "Pool not approved");
         }
         if (toState == AddressState.AllowedPool) {
-            mustUpdate = to;
+            mustUpdate = to;    //mark pool for update
         }
         if (fromState == AddressState.AllowedPool) {
             if (unrestricted) {
@@ -163,7 +156,7 @@ contract TransferPortal is ITransferPortal{
             }
             require (IERC20(from).totalSupply() >= liquiditySupply[from], "Cannot remove liquidity");            
         }
-        if (unrestricted || taxation[from]) {
+        if (unrestricted || taxFree[from]) {
             return new TransferPortalTarget[](0);
         }
 
@@ -203,18 +196,10 @@ contract TransferPortal is ITransferPortal{
         return state;
     }
     
-    // Not intended for external consumption
-    // Always throws
-    // We want to call functions to probe for things, but don't want to open ourselves up to
-    // possible state-changes
-    // So we return a value by reverting with a message
     function throwAddressState(address a) external view{
         try IUniswapV2Pair(a).factory() returns (address factory)
         {
-            // don't care if it's some crappy alt-amm
             if (factory == address(uniswapV2Factory)) {
-                // these checks for token0/token1 are just for additional
-                // certainty that we're interacting with a uniswap pair
                 try IUniswapV2Pair(a).token0() returns (address token0)
                 {
                     if (token0 == address(JCE)) {

@@ -18,6 +18,22 @@ contract LockedLiqCalculator is ILockedLiqCalculator{
         uniswapV2Factory = _uniswapV2Factory;
     }
 
+    function simulateSell(IERC20 wrappedToken, address backingToken) public override view returns (uint256){
+        address pair = UniswapV2Library.pairFor(address(uniswapV2Factory), address(JCE), backingToken);
+        uint256 freeJCE = JCE.totalSupply().sub(JCE.balanceOf(pair));
+
+        uint256 sellAllProceeds = 0;
+        if (freeJCE > 0) {
+            address[] memory path = new address[](2);
+            path[0] = address(JCE);
+            path[1] = backingToken;
+            uint256[] memory amountsOut = UniswapV2Library.getAmountsOut(address(uniswapV2Factory), freeJCE, path);
+            sellAllProceeds = amountsOut[1];
+        }
+ 
+        return sellAllProceeds;
+    }
+
     function calculateLockedwDAI(IERC20 wrappedToken, address backingToken) public override view returns (uint256){
         address pair = UniswapV2Library.pairFor(address(uniswapV2Factory), address(JCE), backingToken);
         uint256 freeJCE = JCE.totalSupply().sub(JCE.balanceOf(pair));
@@ -44,23 +60,5 @@ contract LockedLiqCalculator is ILockedLiqCalculator{
         return currentBacking - requiredBacking;
     }
 
-    function simulateSell(IERC20 wrappedToken, address backingToken) public override view returns (uint256){
-        address pair = UniswapV2Library.pairFor(address(uniswapV2Factory), address(JCE), backingToken);
-        uint256 freeJCE = JCE.totalSupply().sub(JCE.balanceOf(pair));
-
-        uint256 sellAllProceeds = 0;
-        if (freeJCE > 0) {
-            address[] memory path = new address[](2);
-            path[0] = address(JCE);
-            path[1] = backingToken;
-            uint256[] memory amountsOut = UniswapV2Library.getAmountsOut(address(uniswapV2Factory), freeJCE, path);
-            sellAllProceeds = amountsOut[1];
-        }
-       
-        uint256 backingInPool = IERC20(backingToken).balanceOf(pair);
-  
-        if (backingInPool <= sellAllProceeds) { return 0; }
- 
-        return sellAllProceeds;
-    }
+    
 }

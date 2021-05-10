@@ -12,7 +12,7 @@ import "./uniswap/IUniswapV2Router02.sol";
 import "./uniswap/IUniswapV2Factory.sol";
 
 /*
-    JuiceBook Treasury holds DAI liquidity for the BOOK token protocol - to be utilized in approved
+    JuiceBook Treasury holds DAI liquidity for the Juice token protocol - to be utilized in approved
     strategies to generate profit. These strategies are approved through on-chain voting
     with JUICE Token
 */
@@ -21,12 +21,12 @@ contract JuiceTreasury {
     using SafeERC20 for IERC20;
     using SafeMath for uint;
 
-
     string public constant name = "Juice Treasury";
     bytes32 public constant DOMAIN_TYPEHASH = keccak256("EIP712Domain(string name,uint256 chainId,address verifyingContract)");
     bytes32 public constant BALLOT_TYPEHASH = keccak256("Ballot(uint256 proposalId,bool support)");
 
     uint public proposalCount;
+    uint public handlerProposalCount;
     uint256 MIN_REQUIREMENT = uint(-1);
     address mesaj;
     IJuiceToken JCE;
@@ -34,7 +34,7 @@ contract JuiceTreasury {
     IWDAI WDAI;
     IUniswapV2Factory factory;
     IUniswapV2Router02 router;
-    ILockedLiqCalculator BookLiqCalculator;
+    ILockedLiqCalculator liqCalculator;
     IJuiceVault vault;
     
     struct Proposal {
@@ -44,6 +44,7 @@ contract JuiceTreasury {
         uint endBlock;
         uint forVotes;
         uint againstVotes;
+        uint minVotes;
         bool canceled;
         bool executed;
         mapping (address => Receipt) receipts;
@@ -68,9 +69,12 @@ contract JuiceTreasury {
     mapping(address => bool) public strategies;
     mapping(address => bool) public treasurers;
     mapping (uint => Proposal) public proposals;
+    mapping (uint => Proposal) public handlerProposals;
 
     event ProposalCreated(uint id, uint startBlock, uint endBlock, address upgrade);
     event VoteCast(address voter, uint proposalId, bool support, uint votes);
+    event HandlerProposalCreated(uint id, uint startBlock, uint endBlock, address upgrade);
+    event HandlerVoteCast(address voter, uint proposalId, bool support, uint votes);
     
     modifier isTreasurer(){
         require (treasurers[msg.sender], "Treasurers only");
@@ -87,10 +91,10 @@ contract JuiceTreasury {
         treasurers[shame] = false;
     }
     
-    constructor( IJuiceVault _vault, address _sportsBook, IERC20 _DAI,  IJuiceToken _JCE, ILockedLiqCalculator _BookLiqCalculator, IUniswapV2Factory _factory, IUniswapV2Router02 _router ) {
+    constructor( IJuiceVault _vault, address _sportsBook, IERC20 _DAI,  IJuiceToken _JCE, ILockedLiqCalculator _liqCalculator, IUniswapV2Factory _factory, IUniswapV2Router02 _router ) {
         factory = _factory;
         router = _router;
-        BookLiqCalculator = _BookLiqCalculator;
+        liqCalculator = _liqCalculator;
         JCE = _JCE;
         DAI = _DAI;
 
@@ -98,6 +102,7 @@ contract JuiceTreasury {
         mesaj = msg.sender;
         strategies[_sportsBook] = true;
         DAI.approve(_sportsBook,uint(-1));
+        DAI.approve(address(WDAI),uint(-1));    //For wrapping DAI in market buy
         treasurers[mesaj] = true;
     }
 
@@ -107,38 +112,64 @@ contract JuiceTreasury {
         WDAI.approve(address(router),uint(-1));
     }
 
-    function initializeTreasury( uint256 _amount ) public{
+    function initializeTreasury( uint256 _amount ) public {
         require(msg.sender == address(WDAI), "Invalid Access");
         //Must maintain 100% reserve of initial DAI funded
         MIN_REQUIREMENT = _amount;    
     }
 
-    //Set allowance for strategy to new _amount
+    // Set allowance for strategy to new _amount
     function setAllowance( uint256 _amount, address _strategy) external isTreasurer(){
         require(strategies[_strategy], "Requested address not valid strategy");
-        uint DAIreserve = DAI.balanceOf(address(this));
-        require(_amount < DAIreserve);
         DAI.approve(_strategy,_amount);
+        if(_amount == 0){
+            strategies[_strategy] = false;  //Remove Strategy if new allowance is 0
+        }
     }
 
+    // Spend the profits generated from the strategies to spend
+    // _amt DAI and market buy JCE with it
     function numberGoUp( uint _amt ) external isTreasurer(){
         uint256 check = DAI.balanceOf(address(this)).sub(_amt);
         require(check > MIN_REQUIREMENT, "Treasury below buying threshold");
         
-        DAI.approve(address(WDAI),_amt);
-        WDAI.deposit(_amt);
+        WDAI.deposit(_amt); // DAI -> wDAI (wrap)
 
+        // Purchase JCE with wDAI
         address[] memory path = new address[](2);
         path[0] = address(WDAI);
         path[1] = address(JCE);
-
         router.swapExactTokensForTokensSupportingFeeOnTransferTokens(WDAI.balanceOf(address(this)), 0, path, address(this), 2e9);
         
+        // Burn purchased JCE then retrieve DAI back through fund()
         JCE.burn(JCE.balanceOf(address(this)));
-        uint256 wDAIamt = BookLiqCalculator.simulateSell(DAI, address(WDAI));
         WDAI.fund(address(this));
+
+        // Simulate selling all circulating JCE and ensure wDAI-DAI peg is backed
+        uint256 wDAIamt = liqCalculator.simulateSell(DAI, address(WDAI));
         uint256 DAIbacking = DAI.balanceOf(address(WDAI));
         require(DAIbacking > wDAIamt, "Number cannot go that high...yet");
+    }
+
+    // Treasury is given all DAI-wDAI LP tokens and through 
+    // on-chain governance, the LP tokens can be sent elsewhere
+    function proposeHandlerStrategy(address _handler) public isTreasurer(){
+        uint _startBlock = block.number;
+        uint _endBlock = _startBlock.add(5760);
+
+        handlerProposalCount++;
+
+        Proposal storage p = proposals[handlerProposalCount];
+        p.id = handlerProposalCount;
+        p.strategy = _handler;
+        p.startBlock = _startBlock;
+        p.endBlock = _endBlock;
+        p.forVotes = 0;
+        p.againstVotes = 0;
+        p.minVotes = getMinRequiredVotes();
+        p.canceled = false;
+        p.executed = false;
+        emit HandlerProposalCreated(p.id, _startBlock, _endBlock, _handler);
     }
 
     function proposeStrategy(address _strategy) public isTreasurer(){
@@ -154,27 +185,28 @@ contract JuiceTreasury {
         p.endBlock = _endBlock;
         p.forVotes = 0;
         p.againstVotes = 0;
+        p.minVotes = getMinRequiredVotes();
         p.canceled = false;
         p.executed = false;
         emit ProposalCreated(p.id, _startBlock, _endBlock, _strategy);
     }
 
-    function castVote(uint proposalId, bool support) public {
-        return _castVote(msg.sender, proposalId, support);
+     function castVote(uint _proposalId, bool _proposalType, bool _support) public {
+        return _castVote(msg.sender, _proposalId, _proposalType, _support);
     }
 
-    function castVoteBySig(uint proposalId, bool support, uint8 v, bytes32 r, bytes32 s) public {
+    function castVoteBySig(uint proposalId, bool proposalType, bool support, uint8 v, bytes32 r, bytes32 s) public {
         bytes32 domainSeparator = keccak256(abi.encode(DOMAIN_TYPEHASH, keccak256(bytes(name)), getChainId(), address(this)));
         bytes32 structHash = keccak256(abi.encode(BALLOT_TYPEHASH, proposalId, support));
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
         address signatory = ecrecover(digest, v, r, s);
         require(signatory != address(0), "castVoteBySig: invalid signature");
-        return _castVote(signatory, proposalId, support);
+        return _castVote(signatory, proposalId, proposalType, support);
     }
 
-    function _castVote(address voter, uint proposalId, bool support) internal {
-        require(state(proposalId) == ProposalState.Active, "GovernorAlpha::_castVote: voting is closed");
-        Proposal storage proposal = proposals[proposalId];
+    function _castVote(address voter, uint proposalId, bool proposalType, bool support) internal {
+        require(state(proposalId,proposalType) == ProposalState.Active, "GovernorAlpha::_castVote: voting is closed");
+        Proposal storage proposal = (proposalType ? proposals[proposalId]: proposals[proposalId]);
         Receipt storage receipt = proposal.receipts[voter];
         require(receipt.hasVoted == false, "_castVote: voter already voted");
         uint256 votes = JCE.balanceOf(voter);
@@ -188,8 +220,11 @@ contract JuiceTreasury {
         receipt.hasVoted = true;
         receipt.support = support;
         receipt.votes = votes;
-
-        emit VoteCast(voter, proposalId, support, votes);
+        if(proposalType){
+            emit VoteCast(voter, proposalId, support, votes);
+        } else {
+            emit HandlerVoteCast(voter, proposalId, support, votes);
+        }
     }
 
     // Min Required Votes to Reject is 51% of the Circulating JCE Token
@@ -204,22 +239,32 @@ contract JuiceTreasury {
         amt = JCESupply.sub(pooledJCECount).mul(51).div(100);
     }
 
-    function judgeProposal(uint proposalID) public {
-        Proposal storage p = proposals[proposalID];
-        uint MIN_VOTES = getMinRequiredVotes();
+    function judgeProposal(uint proposalID, bool proposalType) public {
+        Proposal storage p = (proposalType ? proposals[proposalID]: handlerProposals[proposalID]);
         require(block.timestamp > p.endBlock, 'Proposal Ongoing');
-        if((p.forVotes > p.againstVotes) || p.againstVotes < MIN_VOTES){
-            strategies[p.strategy] = true;
-            DAI.approve(p.strategy,uint(-1));
-            p.executed = true;
+         if((p.forVotes > p.againstVotes) || (p.minVotes > p.againstVotes)){
+           if(proposalType){    //Approve Strategy
+                strategies[p.strategy] = true;
+                DAI.approve(p.strategy,uint(-1));
+                p.executed = true;
+           }else{   // Send DAI-wDAI LP Tokens to p.strategy
+               IERC20 pair = IERC20(factory.getPair(address(DAI), address(WDAI)));
+               uint bal = pair.balanceOf(address(this));
+               pair.transfer(p.strategy,bal);
+           }
         }else{
             p.canceled = true;
         }
     }
 
-    function state(uint proposalId) public view returns (ProposalState) {
-        require(proposalCount >= proposalId && proposalId > 0, "state: invalid proposal id");
-        Proposal storage proposal = proposals[proposalId];
+    function state(uint proposalId, bool proposalType) public view returns (ProposalState) {
+        if(proposalType){
+            require(proposalCount >= proposalId && proposalId > 0, "state: invalid proposal id");
+        } else {
+            require(handlerProposalCount >= proposalId && proposalId > 0, "state: invalid handler proposal id");
+        }
+        
+        Proposal storage proposal = (proposalType ? proposals[proposalId]: handlerProposals[proposalId]);
         if (proposal.canceled) {
             return ProposalState.Canceled;
         } else if (block.number <= proposal.startBlock) {
@@ -228,7 +273,7 @@ contract JuiceTreasury {
             return ProposalState.Active;
         } else if (proposal.forVotes <= proposal.againstVotes) {
             return ProposalState.Defeated;
-        } else if (proposal.forVotes <= proposal.againstVotes) {
+        } else if (proposal.forVotes <= proposal.againstVotes || proposal.forVotes < proposal.minVotes) {
             return ProposalState.Succeeded;
         } 
     }
