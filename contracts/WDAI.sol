@@ -2,7 +2,7 @@
 // wDAI and DAI always exchange 1:1 through deposit/withdraw functions
 // Proposal Type for Governance:
 // TRUE for Locked Liquidity Calc Proposal, FALSE for Treasury Proposal
-
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.7.0;
 
 import "./SafeERC20.sol";
@@ -93,7 +93,7 @@ contract WDAI is ERC20{
     }
 
     /* Set the address for initial lockedLiqCalculator, cannot be recalled after first execution -
-       Only way to change lockedLiqCalculator is through on-chain governance proposals */
+       After the only way to change lockedLiqCalculator is through on-chain governance proposals */
     function setLiquidityCalculator(ILockedLiqCalculator _lockedLiqCalculator) external quaestorOnly(){
         require(address(lockedLiqCalculator) == address(0x0), "Function no longer callable after first execution");
         lockedLiqCalculator = _lockedLiqCalculator;
@@ -249,10 +249,10 @@ contract WDAI is ERC20{
         require(block.timestamp > p.endBlock, 'Proposal Ongoing');
         if((p.forVotes > p.againstVotes) || (p.minVotes > p.againstVotes)){
             if(proposalType){
-                treasury[p.upgrade] = true;
+                lockedLiqCalculator = ILockedLiqCalculator(p.upgrade);
                 p.executed = true;
             }else{
-                lockedLiqCalculator = ILockedLiqCalculator(p.upgrade);
+                treasury[p.upgrade] = true;
                 p.executed = true;
             }
 

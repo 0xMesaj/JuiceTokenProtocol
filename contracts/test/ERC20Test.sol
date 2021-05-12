@@ -1,10 +1,10 @@
-pragma solidity ^0.7.0;
+pragma solidity ^0.6.12;
 
-import "../ERC20.sol";
+import "../ERC206.sol";
 
 contract ERC20Test is ERC20("Test", "TST") 
 { 
-    constructor()
+    constructor() public
     {
         _mint(msg.sender, 100000000 ether);
     }

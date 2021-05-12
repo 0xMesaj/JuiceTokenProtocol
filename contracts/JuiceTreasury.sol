@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.7.0;
 pragma experimental ABIEncoderV2;
 
@@ -12,9 +13,9 @@ import "./uniswap/IUniswapV2Router02.sol";
 import "./uniswap/IUniswapV2Factory.sol";
 
 /*
-    JuiceBook Treasury holds DAI liquidity for the Juice token protocol - to be utilized in approved
+    Juice Treasury holds DAI liquidity for the Juice token protocol - to be utilized in approved
     strategies to generate profit. These strategies are approved through on-chain voting
-    with JUICE Token
+    with JCE
 */
 
 contract JuiceTreasury {
@@ -68,8 +69,8 @@ contract JuiceTreasury {
 
     mapping(address => bool) public strategies;
     mapping(address => bool) public treasurers;
-    mapping (uint => Proposal) public proposals;
-    mapping (uint => Proposal) public handlerProposals;
+    mapping(uint => Proposal) public proposals;
+    mapping(uint => Proposal) public handlerProposals;
 
     event ProposalCreated(uint id, uint startBlock, uint endBlock, address upgrade);
     event VoteCast(address voter, uint proposalId, bool support, uint votes);
@@ -127,8 +128,10 @@ contract JuiceTreasury {
         }
     }
 
-    // Spend the profits generated from the strategies to spend
-    // _amt DAI and market buy JCE with it
+    /* 
+        Spend profits generated from strategies to use
+        _amt DAI and market buy JCE with it
+    */
     function numberGoUp( uint _amt ) external isTreasurer(){
         uint256 check = DAI.balanceOf(address(this)).sub(_amt);
         require(check > MIN_REQUIREMENT, "Treasury below buying threshold");
@@ -146,7 +149,7 @@ contract JuiceTreasury {
         WDAI.fund(address(this));
 
         // Simulate selling all circulating JCE and ensure wDAI-DAI peg is backed
-        uint256 wDAIamt = liqCalculator.simulateSell(DAI, address(WDAI));
+        uint256 wDAIamt = liqCalculator.simulateSell(address(WDAI));
         uint256 DAIbacking = DAI.balanceOf(address(WDAI));
         require(DAIbacking > wDAIamt, "Number cannot go that high...yet");
     }
@@ -155,7 +158,7 @@ contract JuiceTreasury {
     // on-chain governance, the LP tokens can be sent elsewhere
     function proposeHandlerStrategy(address _handler) public isTreasurer(){
         uint _startBlock = block.number;
-        uint _endBlock = _startBlock.add(5760);
+        uint _endBlock = _startBlock.add(5760); //1 Day assuming ~15 second blocks
 
         handlerProposalCount++;
 
@@ -206,7 +209,7 @@ contract JuiceTreasury {
 
     function _castVote(address voter, uint proposalId, bool proposalType, bool support) internal {
         require(state(proposalId,proposalType) == ProposalState.Active, "GovernorAlpha::_castVote: voting is closed");
-        Proposal storage proposal = (proposalType ? proposals[proposalId]: proposals[proposalId]);
+        Proposal storage proposal = (proposalType ? proposals[proposalId]: handlerProposals[proposalId]);
         Receipt storage receipt = proposal.receipts[voter];
         require(receipt.hasVoted == false, "_castVote: voter already voted");
         uint256 votes = JCE.balanceOf(voter);

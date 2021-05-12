@@ -1,3 +1,4 @@
+// //SPDX-License-Identifier: MIT
 // pragma solidity ^0.5.0;
 // pragma experimental ABIEncoderV2;
 
@@ -58,7 +59,7 @@
 
 //         // wDAI above $1, wrap DAI->wDAI then swap wDAI for DAI
 //         if(reserve0 > reserve1){
-//             IWDAI.deposit(balOfLoanedToken);
+//             IWDAI(wDAI).deposit(balOfLoanedToken);
 //             uint256 wDAIbal = IERC20(wDAI).balanceOf(address(this));
 //             address[] memory path = new address[](2);
 //             path[0] = address(wDAI);
@@ -71,7 +72,7 @@
 //             path[1] = address(wDAI);
 //             uniswapV2Router.swapExactTokensForTokensSupportingFeeOnTransferTokens(balOfLoanedToken, 0, path, address(this), block.timestamp);
 //             uint256 wDAIBalance = wDAI.balanceOf(address(this));
-//             IWDAI.withdraw(wDAIBalance);
+//             IWDAI(wDAI).withdraw(wDAIBalance);
 //         }
 //     }
 

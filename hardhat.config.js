@@ -4,7 +4,6 @@
 require('@nomiclabs/hardhat-waffle');
 // require("hardhat-gas-reporter");
 module.exports = {
-  // solidity: "0.5.12",
   solidity: {
     settings: {
       optimizer: {
@@ -26,10 +25,20 @@ module.exports = {
         settings: { } 
       },
       {
+        version: "0.6.12",
+        settings: { } 
+      },
+      {
         version: "0.7.3",
         settings: { } 
       }
      
-    ]
+    ],
+    overrides: {
+      "contracts/SportsBook.sol": {
+        version: "0.6.12",
+        settings: { }
+    }
+   }
   }
 };

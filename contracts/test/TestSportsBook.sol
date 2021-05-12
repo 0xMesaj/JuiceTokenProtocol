@@ -1,13 +1,12 @@
-pragma solidity ^0.7.0;
-
+pragma solidity ^0.6.12;
 import 'hardhat/console.sol';
-import '../interfaces/IERC20.sol';
+import '../interfaces/IERC206.sol';
 
 contract TestSportsBook  {
     IERC20 dai;
     address treasury;
 
-    constructor (IERC20 _dai) payable{
+    constructor (IERC20 _dai) public payable{
         dai = _dai;
     }
 

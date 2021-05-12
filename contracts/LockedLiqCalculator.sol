@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.7.0;
 
 import "./interfaces/ILockedLiqCalculator.sol";
@@ -18,47 +19,46 @@ contract LockedLiqCalculator is ILockedLiqCalculator{
         uniswapV2Factory = _uniswapV2Factory;
     }
 
-    function simulateSell(IERC20 wrappedToken, address backingToken) public override view returns (uint256){
-        address pair = UniswapV2Library.pairFor(address(uniswapV2Factory), address(JCE), backingToken);
-        uint256 freeJCE = JCE.totalSupply().sub(JCE.balanceOf(pair));
+    // Returns wDAI amount that would be extracted from JCE-wDAI LP if 100% of circulating JCE was sold
+    function simulateSell(address _wdai) public override view returns (uint256){
+        address pair = UniswapV2Library.pairFor(address(uniswapV2Factory), address(JCE), _wdai);
+        uint256 circJCE = JCE.totalSupply().sub(JCE.balanceOf(pair));
 
-        uint256 sellAllProceeds = 0;
-        if (freeJCE > 0) {
+        uint256 potential = 0;
+        if (circJCE > 0) {
             address[] memory path = new address[](2);
             path[0] = address(JCE);
-            path[1] = backingToken;
-            uint256[] memory amountsOut = UniswapV2Library.getAmountsOut(address(uniswapV2Factory), freeJCE, path);
-            sellAllProceeds = amountsOut[1];
+            path[1] = _wdai;
+            uint256[] memory amountsOut = UniswapV2Library.getAmountsOut(address(uniswapV2Factory), circJCE, path);
+            potential = amountsOut[1];
         }
  
-        return sellAllProceeds;
+        return potential; // amount of wDAI that would be swapped out of JCE-wDAI LP if all circ JCE was sold into JCE-wDAI LP
     }
 
-    function calculateLockedwDAI(IERC20 wrappedToken, address backingToken) public override view returns (uint256){
-        address pair = UniswapV2Library.pairFor(address(uniswapV2Factory), address(JCE), backingToken);
-        uint256 freeJCE = JCE.totalSupply().sub(JCE.balanceOf(pair));
+    function calculateLockedwDAI(IERC20 _dai, address _wdai) public override view returns (uint256){
+        address pair = UniswapV2Library.pairFor(address(uniswapV2Factory), address(JCE), _wdai);
+        uint256 circJCE = JCE.totalSupply().sub(JCE.balanceOf(pair));
 
-        uint256 sellAllProceeds = 0;
-        if (freeJCE > 0) {
+        uint256 potential = 0;
+        if (circJCE > 0) {
             address[] memory path = new address[](2);
             path[0] = address(JCE);
-            path[1] = backingToken;
-            uint256[] memory amountsOut = UniswapV2Library.getAmountsOut(address(uniswapV2Factory), freeJCE, path);
-            sellAllProceeds = amountsOut[1];
+            path[1] = _wdai;
+            uint256[] memory amountsOut = UniswapV2Library.getAmountsOut(address(uniswapV2Factory), circJCE, path);
+            potential = amountsOut[1];  // amount of wDAI that would be swapped out of JCE-wDAI LP if all circ JCE was sold into JCE-wDAI LP
         }
        
-        uint256 backingInPool = IERC20(backingToken).balanceOf(pair);
+        uint256 wDAIinPool = IERC20(_wdai).balanceOf(pair); //total wDAI in JCE-wDAI LP
   
-        if (backingInPool <= sellAllProceeds) { return 0; }
-        uint256 excessInPool = backingInPool - sellAllProceeds;
+        if (wDAIinPool <= potential) { return 0; }
+        uint256 lockedWDAI = wDAIinPool - potential;    // amount of wDAI perm locked in JCE-wDAI LP
 
-        uint256 requiredBacking = IERC20(backingToken).totalSupply().sub(excessInPool);
+        uint256 requiredBacking = IERC20(_wdai).totalSupply().sub(lockedWDAI);  // total wDAI that could possbily be unwrapped into DAI
         
-        uint256 currentBacking = wrappedToken.balanceOf(address(backingToken));
+        uint256 currentBacking = _dai.balanceOf(address(_wdai));
         if (requiredBacking >= currentBacking) { return 0; }
 
-        return currentBacking - requiredBacking;
+        return currentBacking - requiredBacking;    // amount of DAI liquidity in wDAI contract that can be released to Juice Treasury
     }
-
-    
 }

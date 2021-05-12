@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 pragma solidity >0.4.13 <0.7.7;
 
 import "../interfaces/IERC20.sol";

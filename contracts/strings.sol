@@ -33,7 +33,7 @@
  *      `s.splitNew('.')` leaves s unmodified, and returns two values
  *      corresponding to the left and right parts of the string.
  */
-
+// SPDX-License-Identifier: MIT
 pragma solidity >0.4.13 <0.7.4;
 
 library strings {

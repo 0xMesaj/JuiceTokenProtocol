@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.7.0;
-import "./IERC20.sol";
-import "./IWrappedERC20Events.sol";
+pragma solidity ^0.6.12;
+import "./IERC206.sol";
+import "./IWrappedERC20Events6.sol";
 
 interface IWETH is IERC20,IWrappedERC20Events{    
     function deposit() external payable;

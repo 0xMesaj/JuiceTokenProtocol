@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.7.0;
+
+// Solidity version 6 to be compatible with SportsBook Contract
+pragma solidity ^0.6.12;
 
 library SafeMath 
 {

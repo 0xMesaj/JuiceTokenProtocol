@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.7.0;
 
 import './SafeMath.sol';
@@ -5,7 +6,6 @@ import './TransferPortal.sol';
 import './WDAI.sol';
 import './interfaces/IJuiceToken.sol';
 import './interfaces/IBookLiquidity.sol';
-import './interfaces/IBookTokenDistribution.sol';
 import './interfaces/IERC20.sol';
 import './interfaces/IWETH.sol';
 import './interfaces/IJuiceTreasury.sol';
@@ -66,7 +66,7 @@ contract SBGE {
     uint16 constant public poolPercent = 8000; // JCE-wDAI Liquidity Pool
     uint16 constant public daiPoolPercent = 600; // DAI-wDAI Liquidity Pool
     uint16 constant public buyPercent = 400; // Used to execute initial purchase of JCE from LP for contributors
-    uint16 constant public development = 500; // Developemt/Project Fund
+    uint16 constant public development = 500; // Development/Project Fund
     uint16 constant public devPayment = 500; // Payment
 
     modifier isMesaj(){
@@ -84,12 +84,8 @@ contract SBGE {
         require (address(_treasury) != address(0x0));
 
         JCE = _JCE;
-        // DAI = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
-        // WETH = IWETH(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);   //REAL WETH ADDR
-        WETH = _WETH; // FAKE WETH ADDR
-        // uniswapFactory = 0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f;
+        WETH = _WETH;
         mesaj = msg.sender;
-
         uniswapV2Router = _uniswapV2Router;
         wdai = _wdai;
         treasury = _treasury;
@@ -157,7 +153,6 @@ contract SBGE {
         totalDAIContribution = totalDAIContribution.add(amountOut);
         daiContribution[msg.sender] = daiContribution[msg.sender].add(amountOut);
         require(daiContribution[msg.sender] > oldContribution, "No new contribution added.");
-
         if (oldContribution == 0 ) {
             contributors.push(msg.sender);
             emit NewContribution(_amount, msg.sender);
@@ -168,7 +163,7 @@ contract SBGE {
     
     //ETH contribution
     receive() external payable active(){
-        require(msg.value > 0, 'Value must me greater than 0');
+        require(msg.value > 0, 'Value must be greater than 0');
         uint256 oldContribution = daiContribution[msg.sender];
 
         uint256 oldBalance = WETH.balanceOf(address(this));
@@ -202,7 +197,7 @@ contract SBGE {
     //Swap token to DAI
     function sellTokenForDAI(address _token, uint256 _amount) internal returns (uint256 daiAmount){
         uint256 swapAmt;
-        if(_token != address(WETH)){
+        if(_token != address(WETH)){    //Swap token into WETH
             address pairWithWETH = IUniswapV2Factory(uniswapV2Factory).getPair(_token, address(WETH));
             uint256 balanceWETHOld = WETH.balanceOf(address(this));
             TransferHelper.safeTransferFrom(_token, msg.sender, pairWithWETH, _amount);
@@ -223,20 +218,11 @@ contract SBGE {
         require(postDAIBalance > preDAIBalance, "Error: Swap");
         daiAmount = postDAIBalance.sub(preDAIBalance);
     }
-    
-    function getAmountOut(uint256 amountIn, uint256 reserveIn, uint256 reserveOut) internal pure returns (uint256 amountOut) {
-        require(amountIn > 0, 'UniswapV2Library: INSUFFICIENT_INPUT_AMOUNT');
-        require(reserveIn > 0 && reserveOut > 0, 'UniswapV2Library: INSUFFICIENT_LIQUIDITY');
-        uint amountInWithFee = amountIn.mul(997);
-        uint numerator = amountInWithFee.mul(reserveOut);
-        uint denominator = reserveIn.mul(1000).add(amountInWithFee);
-        amountOut = numerator / denominator;
-    }
 
     function setupJCEwdai() external isMesaj() {
-        JCEwdai = IUniswapV2Pair(uniswapV2Factory.getPair(address(wdai), address(JCE)));
+        JCEwdai = IUniswapV2Pair(uniswapV2Factory.getPair(address(JCE), address(wdai)));
         if (address(JCEwdai) == address(0)) {
-            JCEwdai = IUniswapV2Pair(uniswapV2Factory.createPair(address(wdai), address(JCE)));
+            JCEwdai = IUniswapV2Pair(uniswapV2Factory.createPair(address(JCE), address(wdai)));
             require (address(JCEwdai) != address(0));
         }
     }
@@ -263,11 +249,11 @@ contract SBGE {
         TransferPortal portal = TransferPortal(address(JCE.transferPortal()));
         portal.setFreeTransfers(true);
 
-        createJCEwdaiLiquidity(totalDAI);
-        createDAILiquidity(totalDAI);
-        preBuyForGroup(totalDAI);
+        createJCEwdaiLiquidity(totalDAICollected);
+        createDAILiquidity(totalDAICollected);
+        preBuyForGroup(totalDAICollected);
 
-        dai.transfer(mesaj, dai.balanceOf(address(this))); //Leftover is Dev fund/payment
+        dai.transfer(mesaj, dai.balanceOf(address(this))); //Leftover DAI is Dev fund/payment
   
         portal.setFreeTransfers(false);
     }
@@ -283,7 +269,7 @@ contract SBGE {
         IERC20(uniswapV2Factory.getPair(address(dai), address(wdai))).transfer(address(treasury),totalDAIwdai);
     }
 
-    function createJCEwdaiLiquidity(uint256 totalDAI) internal{
+    function createJCEwdaiLiquidity(uint256 totalDAI) internal {
         // Create WDAI/JCE Liquidity Pool
         wdai.deposit(totalDAI.mul(poolPercent).div(10000));
 
@@ -291,7 +277,7 @@ contract SBGE {
         lpToken = IERC20(uniswapV2Factory.getPair(address(JCE),address(wdai)));
     }
 
-    function claim() public{
+    function claim() public {
         uint256 amount = daiContribution[msg.sender];
         require (amount > 0, "Nothing to claim");
         require(!isActive, "SBGE still active");

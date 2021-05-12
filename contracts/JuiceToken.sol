@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.7.0;
 pragma experimental ABIEncoderV2;
 
@@ -11,7 +12,7 @@ import "./uniswap/IUniswapV2Factory.sol";
 
 /*
     Juice Token has a transfer portal that is changeable through on-chain governance
-    Initial Supply: 28 Million
+    Initial Supply: 28 Million tokens
 */
 
 contract JuiceToken is ERC20{
@@ -59,7 +60,7 @@ contract JuiceToken is ERC20{
     }
 
     mapping(address => bool) public treasurers;
-    mapping (uint => Proposal) public proposals;
+    mapping(uint => Proposal) public proposals;
 
     event ProposalCreated(uint id, uint startBlock, uint endBlock, address strategy);
     event VoteCast(address voter, uint proposalId, bool support, uint votes);

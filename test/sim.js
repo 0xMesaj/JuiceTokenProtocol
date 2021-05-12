@@ -20,10 +20,8 @@ describe('Juice Protocol Sim', () => {
         SportsBookFactory = await ethers.getContractFactory('TestSportsBook');
         JuiceVaultFactory = await ethers.getContractFactory('JuiceVault');
         JuiceBookSwapFactory = await ethers.getContractFactory('JuiceBookSwap');
-        
+    
         [owner, mesaj, lpMan, ethMan, aOne, aTwo, aThree, aFour, aFive, _] = await ethers.getSigners();
-
-       
     });
 
     it('Uniswap should be initialized', async () => {
@@ -207,7 +205,7 @@ describe('Juice Protocol Sim', () => {
         await uniswap.router.connect(aTwo).swapExactTokensForTokensSupportingFeeOnTransferTokens(utils.parseEther("10000"), 0, [wDAI.address, JUICEtoken.address], aTwo.address, 2e9);
         await JUICEtoken.connect(aTwo).transfer(aFive.address, await JUICEtoken.balanceOf(aTwo.address))
 
-        //Test JUICE Swap
+        //Test JuiceBook Swap
         await portal.connect(owner).noTax(JuiceBookSwap.address,true)
         await DAItoken.connect(owner).mint(owner.address, utils.parseEther("10000000"))
         console.log("---------------------------")
@@ -236,7 +234,7 @@ describe('Juice Protocol Sim', () => {
         const post = await JUICEtoken.balanceOf(aThree.address);
         expect(post).to.not.equal(pre);
 
-        // Test Wrapping/Unwrapping DAI to wDAI
+        // Test Wrapping/Unwrapping DAI <-> wDAI
         var preWrapWDAI = await wDAI.balanceOf(aThree.address)
         var preWrapDAI = await DAItoken.balanceOf(aThree.address)
         await wDAI.connect(aThree).deposit(utils.parseEther('50000'));
@@ -262,9 +260,6 @@ describe('Juice Protocol Sim', () => {
         //Send accessible DAI liquidity to Treasury
         await wDAI.connect(owner).initializeTreasuryBalance(JuiceTreasury.address)
         const final = await DAItoken.balanceOf(JuiceTreasury.address)
-        console.log("Final Juice Treasury DAI Token Balance (Funding for Sports Book):"+(final/10 ** 18).toFixed(2))
-
+        console.log("Final Juice Treasury DAI Token Balance (Funding for Sports Book): "+(final/10 ** 18).toFixed(2) + " DAI")
     }); 
-
-  
 });

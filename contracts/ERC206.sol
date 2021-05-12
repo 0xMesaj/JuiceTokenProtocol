@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.7.0;
+pragma solidity ^0.6.12;
 
-import "./interfaces/IERC20.sol";
-import "./SafeMath.sol";
+// Solidity version 6 to be compatible with SportsBook Contract
+import "./interfaces/IERC206.sol";
+import "./SafeMath6.sol";
 
 /**
  * @dev Implementation of the {IERC20} interface.
@@ -50,7 +51,7 @@ abstract contract ERC20 is IERC20
      * All three of these values are immutable: they can only be set once during
      * construction.
      */
-    constructor (string memory _name, string memory _symbol) 
+    constructor (string memory _name, string memory _symbol) public
     {
         name = _name;
         symbol = _symbol;
