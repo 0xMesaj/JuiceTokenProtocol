@@ -27,7 +27,7 @@ contract SportsBook is ChainlinkClient  {
     using SafeMath for uint256;
     
     event BetRequested(bytes32 betID,bytes16 betRef);
-    event BetAccepted(bytes16 betID,uint256 odds);
+    event BetAccepted(bytes16 betRef,uint256 odds);
     event BetPayout(bytes16 betRef);
     event BetPush(bytes16 betRef);
     event BetRefunded(bytes16 betRef);
