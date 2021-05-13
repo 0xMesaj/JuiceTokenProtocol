@@ -433,7 +433,7 @@ contract SportsBook is ChainlinkClient  {
     function fetchFinalScore( uint256 _index ) public {
         require(!queriedIndexes[_index], "Index Already Queried");
         require(matchResults[_index].recorded == 0, "Index Already Recorded");
-        Chainlink.Request memory req =  buildChainlinkRequest(stringToBytes32('11ecdfc381624639b6dd1929553efb55'), address(this), this.fulfillScores.selector);
+        Chainlink.Request memory req =  buildChainlinkRequest(stringToBytes32('11ecdfc381624639b6dd1929553efb54'), address(this), this.fulfillScores.selector);
         req.add('type', 'score');
         req.addUint('index', _index);
         bytes32 _queryID = sendChainlinkRequestTo(oracle, req, SCORES_ORACLE_PAYMENT);
@@ -442,7 +442,7 @@ contract SportsBook is ChainlinkClient  {
     }
 
     function checkMatchStatus ( uint256 _index ) public {
-        Chainlink.Request memory req = buildChainlinkRequest(stringToBytes32('e3a7cd2990974c10b8324b1b6d7df91b'), address(this), this.fulfillStatus.selector);
+        Chainlink.Request memory req = buildChainlinkRequest(stringToBytes32('e3a7cd2990974c10b8324b1b6d7df91a'), address(this), this.fulfillStatus.selector);
         req.add('type', 'status');
         req.addUint('index', _index);
         bytes32 _queryID = sendChainlinkRequestTo(oracle, req, STATUS_ORACLE_PAYMENT);
@@ -450,7 +450,7 @@ contract SportsBook is ChainlinkClient  {
     }
 
     function buildBet( uint256 _index, uint256 _selection, int256 _rule, uint256 _wagerAmt) internal returns (bytes32 _queryID){
-        Chainlink.Request memory req =  buildChainlinkRequest(stringToBytes32('4110933e0ba54e74845b8ce422b356aa'), address(this), this.fulfillBetOdds.selector);
+        Chainlink.Request memory req =  buildChainlinkRequest(stringToBytes32('4110933e0ba54e74845b8ce422b356az'), address(this), this.fulfillBetOdds.selector);
         req.add('type', 'straight');
         req.addUint('index', _index);
         req.addUint('selection', _selection);
@@ -467,7 +467,7 @@ contract SportsBook is ChainlinkClient  {
             }
             s = s.toSlice().concat(intToString(_rules[i]).toSlice());
         }
-        Chainlink.Request memory req = buildChainlinkRequest(stringToBytes32('d989148b894843259a02c4adaff4fae0'), address(this), this.fulfillParlayOdds.selector);
+        Chainlink.Request memory req = buildChainlinkRequest(stringToBytes32('d989148b894843259a02c4adaff4fae9'), address(this), this.fulfillParlayOdds.selector);
         req.add('type', 'parlay');
         req.add('index', _indexes);
         req.add('selection', _selections);
