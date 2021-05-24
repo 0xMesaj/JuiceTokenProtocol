@@ -526,19 +526,19 @@ contract SportsBookXDAI is ChainlinkClient  {
         if(!freeFee){
             if(_payFeeWithLink){
                 IERC20(LINK).transferFrom(msg.sender,address(this), SCORES_ORACLE_PAYMENT);
-            }else{  //Flash swap ETH to LINK
-                uint256 preXDAIBal = weth.balanceOf(address(this));
-                weth.deposit{value : msg.value}();
-                uint256 postXDAIBal = weth.balanceOf(address(this));
-                uint256 buyAmount = postXDAIBal.sub(preXDAIBal);
+            }else{
+                uint256 preWXDAIBal = wxdai.balanceOf(address(this));
+                wxdai.deposit{value : msg.value}();
+                uint256 postWXDAIBal = wxdai.balanceOf(address(this));
+                uint256 buyAmount = postWXDAIBal.sub(preWXDAIBal);
                 address[] memory path = new address[](2);
-                path[0] = address(weth);
+                path[0] = address(wxdai);
                 path[1] = address(LINK);
                 uint256 preLinkBal = IERC20(LINK).balanceOf(address(this));
-                uint256[] memory amountsBOOK = uniswapV2Router.swapExactTokensForTokens(buyAmount, 0, path, address(this), block.timestamp);
+                uint256[] memory LINKamt = honeySwapRouter.swapExactTokensForTokens(buyAmount, 0, path, address(this), block.timestamp);
                 uint256 postLinkBal = IERC20(LINK).balanceOf(address(this));
                 uint256 purchasedLink = postLinkBal.sub(preLinkBal);
-                require(purchasedLink > SCORES_ORACLE_PAYMENT, "Insufficient ETH Sent to Pay Oracle");
+                require(purchasedLink > PARLAY_ORACLE_PAYMENT, "Insufficient WXDAI Sent to Pay Oracle");
             }
         }
         Chainlink.Request memory req =  buildChainlinkRequest(stringToBytes32('564411f36f3a43029837a9bcff273e62'), address(this), this.fulfillScores.selector);
@@ -553,21 +553,22 @@ contract SportsBookXDAI is ChainlinkClient  {
         if(!freeFee){
             if(_payFeeWithLink){
                 IERC20(LINK).transferFrom(msg.sender,address(this), STATUS_ORACLE_PAYMENT);
-            }else{  //Flash swap ETH to LINK
-                uint256 preXDAIBal = weth.balanceOf(address(this));
-                weth.deposit{value : msg.value}();
-                uint256 postXDAIBal = weth.balanceOf(address(this));
-                uint256 buyAmount = postXDAIBal.sub(preXDAIBal);
+            }else{
+                uint256 preWXDAIBal = wxdai.balanceOf(address(this));
+                wxdai.deposit{value : msg.value}();
+                uint256 postWXDAIBal = wxdai.balanceOf(address(this));
+                uint256 buyAmount = postWXDAIBal.sub(preWXDAIBal);
                 address[] memory path = new address[](2);
-                path[0] = address(weth);
+                path[0] = address(wxdai);
                 path[1] = address(LINK);
                 uint256 preLinkBal = IERC20(LINK).balanceOf(address(this));
-                uint256[] memory amountsBOOK = uniswapV2Router.swapExactTokensForTokens(buyAmount, 0, path, address(this), block.timestamp);
+                uint256[] memory LINKamt = honeySwapRouter.swapExactTokensForTokens(buyAmount, 0, path, address(this), block.timestamp);
                 uint256 postLinkBal = IERC20(LINK).balanceOf(address(this));
                 uint256 purchasedLink = postLinkBal.sub(preLinkBal);
-                require(purchasedLink > STATUS_ORACLE_PAYMENT, "Insufficient xDAI Sent to Pay Oracle");
+                require(purchasedLink > STATUS_ORACLE_PAYMENT, "Insufficient WXDAI Sent to Pay Oracle");
             }
         }
+
         Chainlink.Request memory req = buildChainlinkRequest(stringToBytes32('6df4d51d37124b1d8d7e8590ace79763'), address(this), this.fulfillStatus.selector);
         req.add('type', 'status');
         req.addUint('index', _index);
