@@ -435,6 +435,11 @@ contract SportsBook is ChainlinkClient  {
         delete matchResults[_index];
     }
 
+    function setTreasury( address _treasury ) public isWard(){
+        require(treasury == address(0x0), "Treasury Address Already Initialized");
+        treasury = _treasury;
+    }
+
     // Returns 1 for win, 2 for push
     function computeResult( uint256 _index, uint256 _selection, int256 _rule ) internal view returns(uint win){
         MatchScores memory m = matchResults[_index];
@@ -502,9 +507,28 @@ contract SportsBook is ChainlinkClient  {
         Final Score and Status Requesters are called externally, and odds
         requesters are called internally through bet and betParlay
     */
-    function fetchFinalScore( uint256 _index ) public {
+    function fetchFinalScore( uint256 _index, bool _payFeeWithLink ) public {
         require(!queriedIndexes[_index], "Index Already Queried");
         require(matchResults[_index].recorded == 0, "Index Already Recorded");
+
+        if(!freeFee){
+            if(_payFeeWithLink){
+                IERC20(LINK).transferFrom(msg.sender,address(this), SCORES_ORACLE_PAYMENT);
+            }else{  //Flash swap ETH to LINK
+                uint256 preWETHBal = weth.balanceOf(address(this));
+                weth.deposit{value : msg.value}();
+                uint256 postWETHBal = weth.balanceOf(address(this));
+                uint256 buyAmount = postWETHBal.sub(preWETHBal);
+                address[] memory path = new address[](2);
+                path[0] = address(weth);
+                path[1] = address(LINK);
+                uint256 preLinkBal = IERC20(LINK).balanceOf(address(this));
+                uint256[] memory amountsBOOK = uniswapV2Router.swapExactTokensForTokens(buyAmount, 0, path, address(this), block.timestamp);
+                uint256 postLinkBal = IERC20(LINK).balanceOf(address(this));
+                uint256 purchasedLink = postLinkBal.sub(preLinkBal);
+                require(purchasedLink > SCORES_ORACLE_PAYMENT, "Insufficient ETH Sent to Pay Oracle");
+            }
+        }
         Chainlink.Request memory req =  buildChainlinkRequest(stringToBytes32('588ccdc13dd948848c5de9e580c836e6'), address(this), this.fulfillScores.selector);
         req.add('type', 'score');
         req.addUint('index', _index);
@@ -514,7 +538,25 @@ contract SportsBook is ChainlinkClient  {
         queriedIndexes[_index] = true;
     }
 
-    function checkMatchStatus ( uint256 _index ) public {
+    function checkMatchStatus ( uint256 _index, bool _payFeeWithLink ) public {
+        if(!freeFee){
+            if(_payFeeWithLink){
+                IERC20(LINK).transferFrom(msg.sender,address(this), STATUS_ORACLE_PAYMENT);
+            }else{  //Flash swap ETH to LINK
+                uint256 preWETHBal = weth.balanceOf(address(this));
+                weth.deposit{value : msg.value}();
+                uint256 postWETHBal = weth.balanceOf(address(this));
+                uint256 buyAmount = postWETHBal.sub(preWETHBal);
+                address[] memory path = new address[](2);
+                path[0] = address(weth);
+                path[1] = address(LINK);
+                uint256 preLinkBal = IERC20(LINK).balanceOf(address(this));
+                uint256[] memory amountsBOOK = uniswapV2Router.swapExactTokensForTokens(buyAmount, 0, path, address(this), block.timestamp);
+                uint256 postLinkBal = IERC20(LINK).balanceOf(address(this));
+                uint256 purchasedLink = postLinkBal.sub(preLinkBal);
+                require(purchasedLink > STATUS_ORACLE_PAYMENT, "Insufficient ETH Sent to Pay Oracle");
+            }
+        }
         Chainlink.Request memory req = buildChainlinkRequest(stringToBytes32('9cde1c47e09f4794975b842616a76355'), address(this), this.fulfillStatus.selector);
         req.add('type', 'status');
         req.addUint('index', _index);

@@ -374,6 +374,11 @@ contract SportsBook is ChainlinkClient  {
         delete matchResults[_index];
     }
 
+    function setTreasury( address _treasury ) public isWard(){
+        require(treasury == address(0x0), "Treasury Address Already Initialized");
+        treasury = _treasury;
+    }
+
     // Returns 1 for win, 2 for push
     function computeResult( uint256 _index, uint256 _selection, int256 _rule ) internal view returns(uint win){
         MatchScores memory m = matchResults[_index];
