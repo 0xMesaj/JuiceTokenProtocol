@@ -254,7 +254,6 @@ contract SportsBookXDAI is ChainlinkClient  {
             delete bets[_betRef];
             uint256 winAmt = amt.mul(odds).div(100);
             creator.send(winAmt);
-            // dai.transfer(creator, winAmt);
             emit BetPayout(_betRef);
         }
         //Push
