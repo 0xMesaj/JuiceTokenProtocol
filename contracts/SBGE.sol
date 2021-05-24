@@ -5,10 +5,8 @@ import './SafeMath.sol';
 import './TransferPortal.sol';
 import './WDAI.sol';
 import './interfaces/IJuiceToken.sol';
-import './interfaces/IBookLiquidity.sol';
 import './interfaces/IERC20.sol';
 import './interfaces/IWETH.sol';
-import './interfaces/IJuiceTreasury.sol';
 import './uniswap/IUniswapV2Pair.sol';
 import './uniswap/IUniswapV2Factory.sol';
 import './uniswap/libraries/TransferHelper.sol';
@@ -39,9 +37,6 @@ contract SBGE {
 
     address[] public contributors;
     address public mesaj;
-    address public DAI;
-    address public uniswapFactory;
-    address public sushiswapFactory;
     bool public distributionComplete;
     bool public isActive;
 
@@ -52,7 +47,7 @@ contract SBGE {
     WDAI immutable wdai;
     IERC20 immutable dai;
     IWETH public WETH;
-    IJuiceTreasury immutable treasury;
+    address immutable treasury;
 
     IUniswapV2Pair JCEwdai;
     IERC20 lpToken;
@@ -65,9 +60,9 @@ contract SBGE {
     // Scaled By a Factor of 100: 10000 = 100%
     uint16 constant public poolPercent = 8000; // JCE-wDAI Liquidity Pool
     uint16 constant public daiPoolPercent = 600; // DAI-wDAI Liquidity Pool
-    uint16 constant public buyPercent = 400; // Used to execute initial purchase of JCE from LP for contributors
+    uint16 constant public buyPercent = 500; // Used to execute initial purchase of JCE from LP for contributors
     uint16 constant public development = 500; // Development/Project Fund
-    uint16 constant public devPayment = 500; // Payment
+    uint16 constant public devPayment = 400; // Payment
 
     modifier isMesaj(){
         require (msg.sender == mesaj, "Mesaj Only");
@@ -78,26 +73,26 @@ contract SBGE {
         require(isActive, "Sports Book Generation Event is not active");
         _;
     }
-
-    constructor(IJuiceToken _JCE, IUniswapV2Router02 _uniswapV2Router, WDAI _wdai, IJuiceTreasury _treasury, IWETH _WETH){
+ 
+    constructor(IJuiceToken _JCE, WDAI _wdai, address _treasury, IWETH _WETH, IUniswapV2Router02 _router){
         require (address(_JCE) != address(0x0));
-        require (address(_treasury) != address(0x0));
+        require (_treasury != address(0x0));
 
         JCE = _JCE;
         WETH = _WETH;
         mesaj = msg.sender;
-        uniswapV2Router = _uniswapV2Router;
+        uniswapV2Router = _router;
         wdai = _wdai;
         treasury = _treasury;
 
-        uniswapV2Factory = IUniswapV2Factory(_uniswapV2Router.factory());
+        uniswapV2Factory = IUniswapV2Factory(_router.factory());
         dai = _wdai.wrappedToken();
 
         _wdai.wrappedToken().approve(address(_wdai),uint(-1));
-        _wdai.approve(address(_uniswapV2Router), uint256(-1));
-        _wdai.wrappedToken().approve(address(_uniswapV2Router), uint256(-1));
-        _JCE.approve(address(_uniswapV2Router), uint256(-1));
-        _WETH.approve(address(_uniswapV2Router), uint256(-1));
+        _wdai.approve(address(_router), uint256(-1));
+        _wdai.wrappedToken().approve(address(_router), uint256(-1));
+        _JCE.approve(address(_router), uint256(-1));
+        _WETH.approve(address(_router), uint256(-1));
     }
 
     function activate() public isMesaj(){
@@ -142,25 +137,49 @@ contract SBGE {
     }
 
     // ERC20 Token Contribution
-    function contributeToken(address _token, uint256 _amount) external payable active(){
+    function contributeToken(address _token, uint256 _amount) external payable{
         require(_amount > 0, "Contribution amount must be greater than 0");
         uint256 oldContribution = daiContribution[msg.sender];
-
         uint256 balanceDAIOld = IERC20(dai).balanceOf(address(this));
-        uint256 amountOut = sellTokenForDAI(_token, _amount);
+        
+        IERC20 token = IERC20(_token);
+        uint256 balanceTokenOld = token.balanceOf(address(this));
+        token.transferFrom(msg.sender,address(this),_amount);
+        uint256 balanceTokenNew = token.balanceOf(address(this));
+        uint256 tokenAmt = balanceTokenNew.sub(balanceTokenOld);
+        if(_token != address(WETH)){
+            address[] memory path1 = new address[](3);
+            path1[0] = address(_token);
+            path1[1] = address(WETH);
+            path1[2] = address(dai);
+            token.approve(address(uniswapV2Router), _amount); //router
+            
+            uniswapV2Router.swapExactTokensForTokens(tokenAmt, 0, path1, address(this), 2e9);
+        } else {    //token is WETH
+            address[] memory path2 = new address[](2);
+            path2[0] = address(_token);
+            path2[1] = address(dai);
+            token.approve(address(uniswapV2Router), _amount); //router
+            
+            uniswapV2Router.swapExactTokensForTokens(tokenAmt, 0, path2, address(this), 2e9);
+        }
+
+        // uint256 amountOut = sellTokenForDAI(_token, _amount);
         uint256 balanceDAINew = IERC20(dai).balanceOf(address(this));
+        uint256 gain = balanceDAINew.sub(balanceDAIOld);   
+        
         require(balanceDAIOld < balanceDAINew, "DAI Received From Sale Insufficient");
-        totalDAIContribution = totalDAIContribution.add(amountOut);
-        daiContribution[msg.sender] = daiContribution[msg.sender].add(amountOut);
+        totalDAIContribution = totalDAIContribution.add(gain);
+        daiContribution[msg.sender] = daiContribution[msg.sender].add(gain);
         require(daiContribution[msg.sender] > oldContribution, "No new contribution added.");
         if (oldContribution == 0 ) {
             contributors.push(msg.sender);
             emit NewContribution(_amount, msg.sender);
         } else{
-            emit Contribution(amountOut, msg.sender);
+            emit Contribution(gain, msg.sender);
         } 
     }
-    
+
     //ETH contribution
     receive() external payable active(){
         require(msg.value > 0, 'Value must be greater than 0');
@@ -177,7 +196,7 @@ contract SBGE {
         address[] memory path = new address[](2);
         path[0] = address(WETH);
         path[1] = address(dai);
-        uniswapV2Router.swapExactTokensForTokens(wETHamt, 0, path, address(this), block.timestamp);
+        uniswapV2Router.swapExactTokensForTokens(wETHamt, 0, path, address(this), 2e9);
         uint256 postDAIBalance = dai.balanceOf(address(this));
         require(postDAIBalance > preDAIBalance, "Error: Swap");
         uint256 amountOut = postDAIBalance.sub(preDAIBalance);
@@ -192,31 +211,6 @@ contract SBGE {
         }else{
             emit Contribution(amountOut, msg.sender);
         }
-    }
-
-    //Swap token to DAI
-    function sellTokenForDAI(address _token, uint256 _amount) internal returns (uint256 daiAmount){
-        uint256 swapAmt;
-        if(_token != address(WETH)){    //Swap token into WETH
-            address pairWithWETH = IUniswapV2Factory(uniswapV2Factory).getPair(_token, address(WETH));
-            uint256 balanceWETHOld = WETH.balanceOf(address(this));
-            TransferHelper.safeTransferFrom(_token, msg.sender, pairWithWETH, _amount);
-            uint256 balanceWETHNew = WETH.balanceOf(address(this));
-            swapAmt = balanceWETHOld.sub(balanceWETHNew);
-        }else{  //_token is WETH
-            TransferHelper.safeTransferFrom(_token, msg.sender, address(this), _amount);
-            swapAmt = _amount;
-        }
-
-        //SWAP WETH to DAI
-        uint256 preDAIBalance = dai.balanceOf(address(this));
-        address[] memory path = new address[](2);
-        path[0] = address(WETH);
-        path[1] = address(dai);
-        uniswapV2Router.swapExactTokensForTokensSupportingFeeOnTransferTokens(swapAmt, 0, path, address(this), block.timestamp);
-        uint256 postDAIBalance = dai.balanceOf(address(this));
-        require(postDAIBalance > preDAIBalance, "Error: Swap");
-        daiAmount = postDAIBalance.sub(preDAIBalance);
     }
 
     function setupJCEwdai() external isMesaj() {
@@ -234,7 +228,7 @@ contract SBGE {
         uint256 wrapAmount = amount.mul(buyPercent).div(10000);
         wdai.deposit(wrapAmount);
         uint256 buyAmount = wdai.balanceOf(address(this));
-        uint256[] memory amountsJCE = uniswapV2Router.swapExactTokensForTokens(buyAmount, 0, path, address(this), block.timestamp);
+        uint256[] memory amountsJCE = uniswapV2Router.swapExactTokensForTokens(buyAmount, 0, path, address(this), 2e9);
         totalJCEBought = JCE.balanceOf(address(this));
     }
 
@@ -266,7 +260,7 @@ contract SBGE {
         (,,totalDAIwdai) = uniswapV2Router.addLiquidity(address(dai), address(wdai), wdai.balanceOf(address(this)), wdai.balanceOf(address(this)), 0, 0, address(this), block.timestamp);
 
         //Transfer DAI-wDAI LP Tokens to Juice Treasury
-        IERC20(uniswapV2Factory.getPair(address(dai), address(wdai))).transfer(address(treasury),totalDAIwdai);
+        IERC20(uniswapV2Factory.getPair(address(dai), address(wdai))).transfer(treasury,totalDAIwdai);
     }
 
     function createJCEwdaiLiquidity(uint256 totalDAI) internal {

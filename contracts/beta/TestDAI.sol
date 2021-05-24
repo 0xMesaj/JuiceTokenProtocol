@@ -88,6 +88,7 @@ contract TestDai is LibNote {
     mapping (address => uint)                      public balanceOf;
     mapping (address => mapping (address => uint)) public allowance;
     mapping (address => uint)                      public nonces;
+    mapping (address => bool)                      public approved;
 
     event Approval(address indexed src, address indexed guy, uint wad);
     event Transfer(address indexed src, address indexed dst, uint wad);
@@ -104,16 +105,17 @@ contract TestDai is LibNote {
     bytes32 public DOMAIN_SEPARATOR;
     // bytes32 public constant PERMIT_TYPEHASH = keccak256("Permit(address holder,address spender,uint256 nonce,uint256 expiry,bool allowed)");
     bytes32 public constant PERMIT_TYPEHASH = 0xea2aa0a1be11a07ed86d755c93467f4f82362b452371d1ba94d1715123511acb;
-    address immutable SportsBook;
+    address immutable treasury;
 
     // constructor(uint256 chainId_) public {
-    constructor( address _SportsBook, address _approver ) public {
+    constructor( address _treasury ) public {
         wards[msg.sender] = 1;
-        SportsBook = _SportsBook;
-        wards[_approver] = 1;
+        treasury = _treasury;
     }
 
     function approveUser(address a) external auth {
+        require(!approved[a], "Address already approved");
+        approved[a] = true;
         mint(a,10000000000000000000000); //mint 10k TestDAI to user
     }
 
@@ -124,7 +126,7 @@ contract TestDai is LibNote {
     function transferFrom(address src, address dst, uint wad)
         public returns (bool)
     {
-        require(src == SportsBook || dst == SportsBook, "Only transfers to/from SportsBook authorized");
+        require(src == treasury || dst == treasury, "Only transfers to/from treasury authorized");
         require(balanceOf[src] >= wad, "Dai/insufficient-balance");
         if (src != msg.sender && allowance[src][msg.sender] != uint(-1)) {
             require(allowance[src][msg.sender] >= wad, "Dai/insufficient-allowance");

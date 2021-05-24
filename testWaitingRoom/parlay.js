@@ -10,7 +10,7 @@ describe('Test Parlay Resolutions', () => {
         tokenFactory = await ethers.getContractFactory('TestToken');
         token = await tokenFactory.deploy();
         sbFactory = await ethers.getContractFactory('TestParlay');
-        sportsBook = await sbFactory.deploy(token.address, ["69","96"] ,["4","4"],[0,-100]);
+        sportsBook = await sbFactory.deploy(token.address);
         [owner, addr1, addr2, _] = await ethers.getSigners();
     });
 
@@ -23,12 +23,12 @@ describe('Test Parlay Resolutions', () => {
         
             // await sportsBook.connect(owner).buildParlay("1323,3213","5,5",[95,-95])
         
-        
-            await sportsBook.connect(owner).resolveParlay('0x3139352c3335322c313832000000001230000000000000000000000000000000')
-            // var ans = await sportsBook.ans()
-            // console.log((parseInt(ans._hex,16)))
+            await sportsBook.connect(owner).betParlay('0x70a6a75c0d33c2a7597ba2d25252ce5a',10000,"16588,16589,16588,16589","0,4,0,4",[10,0,10,0])
+            // await sportsBook.connect(owner).testLook('0x70a6a75c0d33c2a7597ba2d25252ce5a',1)
+            // await sportsBook.connect(owner).testValue()
+            // .then( (res) => console.log(parseInt(res._hex)))
 
-            // expect((parseInt(ans._hex,16))).to.equal(1);
+            await sportsBook.connect(owner).refundParlay('0x70a6a75c0d33c2a7597ba2d25252ce5a')
 
         })
 

@@ -10,7 +10,6 @@ import "./ERC20.sol";
 import "./interfaces/ILockedLiqCalculator.sol";
 import "./interfaces/IERC20.sol";
 import "./interfaces/IJuiceVault.sol";
-import "./uniswap/IUniswapV2Factory.sol";
 import "./SafeMath.sol";
 
 contract WDAI is ERC20{
@@ -35,7 +34,6 @@ contract WDAI is ERC20{
     uint public liquidityProposalCount;
     uint public treasuryProposalCount;
     IERC20 public immutable wrappedToken;
-    IUniswapV2Factory factory;
     ILockedLiqCalculator public lockedLiqCalculator;
     address mesaj;
     IERC20 JCE;
@@ -81,7 +79,7 @@ contract WDAI is ERC20{
         _;
     }
 
-    constructor ( IJuiceVault _vault,IERC20 _JCE, IERC20 _wrappedToken, address _treasury, IUniswapV2Factory _factory, string memory _name, string memory _symbol ) ERC20 (_name, _symbol) {
+    constructor ( IJuiceVault _vault,IERC20 _JCE, IERC20 _wrappedToken, address _treasury, string memory _name, string memory _symbol ) ERC20 (_name, _symbol) {
         wrappedToken = _wrappedToken;
         treasury[_treasury] = true;
         quaestor[_treasury] = true;

@@ -163,10 +163,14 @@ contract JuiceToken is ERC20{
     }
 
     //Set Initial Transfer Portal address, only callable once
-    function setTransferPortal(ITransferPortal _transferPortal) external {
-        require (msg.sender == mesaj, "Mesaj only");
+    function setTransferPortal(ITransferPortal _transferPortal) external isTreasurer() {
         require(address(transferPortal) == address(0x0), "Transfer Portal Already Initiailized");
         transferPortal = _transferPortal;
+    }
+
+    function setJCEVault( IJuiceVault _vault ) external isTreasurer(){
+        require( address(vault) == address(0x0), "Vault already set");
+        vault = _vault;
     }
 
     function burn(uint256 amount) public virtual returns(bool) {
@@ -215,11 +219,6 @@ contract JuiceToken is ERC20{
         uint chainId;
         assembly { chainId := chainid() }
         return chainId;
-    }
-
-    function setJCEVault( IJuiceVault _vault ) external isTreasurer(){
-        require( address(vault) == address(0x0), "Vault already set");
-        vault = _vault;
     }
 
     receive() external payable { }

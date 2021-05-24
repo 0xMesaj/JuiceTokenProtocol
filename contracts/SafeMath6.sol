@@ -3,7 +3,7 @@
 // Solidity version 6 to be compatible with SportsBook Contract
 pragma solidity ^0.6.12;
 
-library SafeMath 
+library SafeMath
 {
     function add(uint256 a, uint256 b) internal pure returns (uint256) 
     {

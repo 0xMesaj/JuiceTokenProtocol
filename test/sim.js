@@ -1,7 +1,7 @@
 const { expect } = require('chai');
 const { ethers } = require('hardhat');
 const { utils, BigNumber, constants } = require("ethers");
-const { createWETH, createUniswap } = require("./helpers.js");
+const { createWETH, createUniswap } = require("../test/helpers.js");
 
 describe('Juice Protocol Sim', () => {
     let owner, mesaj, aOne, aTwo, aThree, aFour, aFive;
@@ -20,6 +20,7 @@ describe('Juice Protocol Sim', () => {
         SportsBookFactory = await ethers.getContractFactory('TestSportsBook');
         JuiceVaultFactory = await ethers.getContractFactory('JuiceVault');
         JuiceBookSwapFactory = await ethers.getContractFactory('JuiceBookSwap');
+        BridgeToXDAIFactory = await ethers.getContractFactory('BridgeToXDAI');
     
         [owner, mesaj, lpMan, ethMan, aOne, aTwo, aThree, aFour, aFive, _] = await ethers.getSigners();
     });
@@ -32,29 +33,34 @@ describe('Juice Protocol Sim', () => {
 
     it('Sim', async () => {
         //Deploy
+        const DAItoken = await uniswap.dai;
+        const xDAISportsBook = await SportsBookFactory.deploy(DAItoken.address); 
+        const xDaiBridge = await BridgeToXDAIFactory.deploy(xDAISportsBook.address,DAItoken.address)
         const JUICEtoken = await JUICE.deploy("JuiceToken","JCE");
         const JuiceVault = await JuiceVaultFactory.deploy(JUICEtoken.address);
         const portal = await TransferPortalFactory.deploy(JUICEtoken.address,uniswap.router.address);
-        const DAItoken = await uniswap.dai;     
-        const BookLiqCalculator = await LiqCalculatorFactory.deploy(JUICEtoken.address, uniswap.factory.address);
-        //Init Juice Token Transfer Portal
+        const LiqCalculator = await LiqCalculatorFactory.deploy(JUICEtoken.address, uniswap.factory.address);
         await JUICEtoken.setTransferPortal(portal.address);
         const SportsBook = await SportsBookFactory.deploy(DAItoken.address); 
-        const JuiceTreasury = await JuiceTreasuryFactory.deploy(JuiceVault.address, SportsBook.address, DAItoken.address, JUICEtoken.address, BookLiqCalculator.address, uniswap.factory.address, uniswap.router.address)
-        const wDAI = await wDAIContract.deploy(JuiceVault.address, JUICEtoken.address, DAItoken.address, JuiceTreasury.address, uniswap.factory.address, "wDAI", "wDAI");
-        const JuiceBookSwap = await JuiceBookSwapFactory.deploy(JUICEtoken.address,wDAI.address,uniswap.router.address)
+        const JuiceTreasury = await JuiceTreasuryFactory.deploy(JuiceVault.address, SportsBook.address, xDaiBridge.address, DAItoken.address, JUICEtoken.address, LiqCalculator.address);
+        await xDaiBridge.connect(owner).setTreasury(JuiceTreasury.address);
+        const wDAI = await wDAIContract.deploy(JuiceVault.address, JUICEtoken.address, DAItoken.address, JuiceTreasury.address, "wDAI", "wDAI");
+        const JuiceBookSwap = await JuiceBookSwapFactory.deploy(JUICEtoken.address,wDAI.address,uniswap.router.address);
 
         await JuiceTreasury.connect(owner).setWDAI(wDAI.address);
         
         await JUICEtoken.connect(owner).setJCEVault(JuiceVault.address);
         
-        const sbge = await SBGEContractFactory.deploy(JUICEtoken.address, uniswap.router.address, wDAI.address, JuiceTreasury.address, weth.address);
+        const sbge = await SBGEContractFactory.deploy(JUICEtoken.address, wDAI.address, JuiceTreasury.address, weth.address,uniswap.router.address);
 
         await wDAI.connect(owner).designateTreasury(sbge.address,true);
-        //Promote owner and SBGE to Queastor of wDAI contract
+        //Promote owner and SBGE to Quaestor of wDAI contract
         await wDAI.connect(owner).promoteQuaestor(sbge.address,true);
         await wDAI.connect(owner).promoteQuaestor(owner.address,true);
-        await wDAI.connect(owner).setLiquidityCalculator(BookLiqCalculator.address);
+        await wDAI.connect(owner).setLiquidityCalculator(LiqCalculator.address);
+        //END Set up
+
+
         //Mint DAI to addresses to contribute to SBGE
         await DAItoken.connect(owner).mint(aTwo.address, utils.parseEther("30000"));
         await DAItoken.connect(owner).mint(aThree.address, utils.parseEther("20000000"));

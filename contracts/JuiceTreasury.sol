@@ -30,6 +30,7 @@ contract JuiceTreasury {
     uint public handlerProposalCount;
     uint256 MIN_REQUIREMENT = uint(-1);
     address mesaj;
+
     IJuiceToken JCE;
     IERC20 DAI;
     IWDAI WDAI;
@@ -92,22 +93,27 @@ contract JuiceTreasury {
         treasurers[shame] = false;
     }
     
-    constructor( IJuiceVault _vault, address _sportsBook, IERC20 _DAI,  IJuiceToken _JCE, ILockedLiqCalculator _liqCalculator, IUniswapV2Factory _factory, IUniswapV2Router02 _router ) {
-        factory = _factory;
-        router = _router;
+    constructor( IJuiceVault _vault, address _sportsBook, address _xdaiBridge, IERC20 _DAI,  IJuiceToken _JCE, ILockedLiqCalculator _liqCalculator) {
+        factory = IUniswapV2Factory(0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f);
+        router = IUniswapV2Router02(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
         liqCalculator = _liqCalculator;
         JCE = _JCE;
         DAI = _DAI;
 
         vault = _vault;
         mesaj = msg.sender;
-        strategies[_sportsBook] = true;
+
+        strategies[_sportsBook] = true; // Approve mainnet sports book
         DAI.approve(_sportsBook,uint(-1));
-        DAI.approve(address(WDAI),uint(-1));    //For wrapping DAI in market buy
+
+        strategies[_xdaiBridge] = true; // Approve xDAI bridge/SportsBook
+        DAI.approve(_xdaiBridge,uint(-1));
+
+        DAI.approve(address(WDAI),uint(-1)); // For wrapping DAI in market buy
         treasurers[mesaj] = true;
     }
 
-    function setWDAI( IWDAI _wdai ) external isTreasurer(){
+    function setWDAI( IWDAI _wdai ) external isTreasurer() {
         require( address(WDAI) == address(0x0), "Wrapped DAI already set");
         WDAI = _wdai;
         WDAI.approve(address(router),uint(-1));
@@ -115,12 +121,13 @@ contract JuiceTreasury {
 
     function initializeTreasury( uint256 _amount ) public {
         require(msg.sender == address(WDAI), "Invalid Access");
-        //Must maintain 100% reserve of initial DAI funded
-        MIN_REQUIREMENT = _amount;    
+        uint256 split = _amount.div(2);  //Half goes to xDAI network
+        //Must maintain reserve of initial funding
+        MIN_REQUIREMENT = split;
     }
 
     // Set allowance for strategy to new _amount
-    function setAllowance( uint256 _amount, address _strategy) external isTreasurer(){
+    function setAllowance( uint256 _amount, address _strategy) external isTreasurer() {
         require(strategies[_strategy], "Requested address not valid strategy");
         DAI.approve(_strategy,_amount);
         if(_amount == 0){
