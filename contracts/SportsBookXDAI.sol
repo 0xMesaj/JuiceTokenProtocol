@@ -519,7 +519,7 @@ contract SportsBookXDAI is ChainlinkClient  {
         Final Score and Status Requesters are called externally, and odds
         requesters are called internally through bet and betParlay
     */
-    function fetchFinalScore( uint256 _index, bool _payFeeWithLink ) public {
+    function fetchFinalScore( uint256 _index, bool _payFeeWithLink ) public payable{
         require(!queriedIndexes[_index], "Index Already Queried");
         require(matchResults[_index].recorded == 0, "Index Already Recorded");
 
@@ -549,7 +549,7 @@ contract SportsBookXDAI is ChainlinkClient  {
         queriedIndexes[_index] = true;
     }
 
-    function checkMatchStatus ( uint256 _index, bool _payFeeWithLink ) public {
+    function checkMatchStatus ( uint256 _index, bool _payFeeWithLink ) public payable{
         if(!freeFee){
             if(_payFeeWithLink){
                 IERC20(LINK).transferFrom(msg.sender,address(this), STATUS_ORACLE_PAYMENT);
