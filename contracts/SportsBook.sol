@@ -106,14 +106,13 @@ contract SportsBook is ChainlinkClient  {
     bool private requireApproval;
     IWETH weth;
     IUniswapV2Router02 immutable uniswapV2Router;
-    address immutable treasury;
+    address treasury;
 
-    constructor (IERC20 _DAI, IWETH _WETH, address _treasury, IUniswapV2Router02 _uniswapV2Router) public payable{
+    constructor (IERC20 _DAI, IWETH _WETH, IUniswapV2Router02 _uniswapV2Router) public payable{
         setPublicChainlinkToken();
 
         mesaj = msg.sender;
         wards[mesaj] = true;
-        treasury = _treasury;
         
         uniswapV2Router = _uniswapV2Router;
         isOperational = false;
@@ -380,6 +379,7 @@ contract SportsBook is ChainlinkClient  {
 
     // FALSE to pause all contract functionality
     function setSportsBookState(bool state) public isWard(){
+        require(treasury != address(0x0), "Treasury address must be initialized first");
         isOperational = state;
     }
 
@@ -507,7 +507,7 @@ contract SportsBook is ChainlinkClient  {
         Final Score and Status Requesters are called externally, and odds
         requesters are called internally through bet and betParlay
     */
-    function fetchFinalScore( uint256 _index, bool _payFeeWithLink ) public {
+    function fetchFinalScore( uint256 _index, bool _payFeeWithLink ) public payable{
         require(!queriedIndexes[_index], "Index Already Queried");
         require(matchResults[_index].recorded == 0, "Index Already Recorded");
 
@@ -538,7 +538,7 @@ contract SportsBook is ChainlinkClient  {
         queriedIndexes[_index] = true;
     }
 
-    function checkMatchStatus ( uint256 _index, bool _payFeeWithLink ) public {
+    function checkMatchStatus ( uint256 _index, bool _payFeeWithLink ) public payable{
         if(!freeFee){
             if(_payFeeWithLink){
                 IERC20(LINK).transferFrom(msg.sender,address(this), STATUS_ORACLE_PAYMENT);
