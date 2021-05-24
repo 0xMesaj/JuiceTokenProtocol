@@ -108,17 +108,15 @@ contract SportsBookXDAI is ChainlinkClient  {
     bool public isTerminated;
     IWXDAI wxdai;
     IUniswapV2Router02 immutable honeySwapRouter;
-    address immutable treasury;
     address mainnetContract;
     uint256 lastBalance;
     IxDAIAlternativeReceiver immutable tokenbridge;
 
-    constructor (IERC20 _DAI, address _treasury ) public payable{
+    constructor (IERC20 _DAI) public payable{
         setChainlinkToken(0xE2e73A1c69ecF83F464EFCE6A5be353a37cA09b2);
 
         mesaj = msg.sender;
         wards[mesaj] = true;
-        treasury = _treasury;
         
         tokenbridge = IxDAIAlternativeReceiver(0x7301CFA0e1756B71869E93d4e4Dca5c7d0eb0AA6);
         honeySwapRouter = IUniswapV2Router02(0x1C232F01118CB8B424793ae03F870aa7D0ac7f77);
@@ -266,7 +264,6 @@ contract SportsBookXDAI is ChainlinkClient  {
 
             delete bets[_betRef];
             creator.send(pushAmt);
-            // dai.transferFrom(treasury,creator,pushAmt);
             emit BetPush(_betRef);
         }
     }
@@ -305,7 +302,6 @@ contract SportsBookXDAI is ChainlinkClient  {
 
             delete parlays[_betRef];
             uint256 winAmt = amt.mul(odds).div(100);
-            // dai.transferFrom(treasury,creator,winAmt);
             creator.send(winAmt);
             emit BetPayout(_betRef);
         }
@@ -324,7 +320,6 @@ contract SportsBookXDAI is ChainlinkClient  {
             uint256 amt = b.amount;
             address payable refundee = payable(b.creator);
             delete bets[_betRef];
-            // dai.transferFrom(treasury,refundee,amt);
             refundee.send(amt);
             emit BetRefunded(_betRef);
         }
@@ -375,22 +370,15 @@ contract SportsBookXDAI is ChainlinkClient  {
     function deleteBet(bytes16 _betRef, bool _straight) public isWard(){
         if(_straight){
             Bet memory b = bets[_betRef];
-            require(matchResults[b.index].recorded == 0, "Match already finalized - Cannot Delete Bet");
             uint256 amt = b.amount;
             address payable creator = payable(b.creator);
-
             delete bets[_betRef];
-            // dai.transferFrom(treasury,creator,amt);
             creator.send(amt);
         }else{
             Parlay memory p = parlays[_betRef];
-            for(uint i=0;i<p.indexes.length;i++){
-                require(matchResults[bytesToUInt(stringToBytes32(p.indexes[i]))].recorded == 0, "Match already finalized - Cannot Delete Parlay");
-            }
             uint256 amt = p.amount;
             address payable creator = payable(p.creator);
             delete parlays[_betRef];
-            // dai.transferFrom(treasury,creator,amt);
             creator.send(amt);
         }
         emit BetDeleted(_betRef);

@@ -313,17 +313,12 @@ contract SportsBook is ChainlinkClient  {
     function deleteBet(bytes16 _betRef, bool _straight) public isWard(){
         if(_straight){
             Bet memory b = bets[_betRef];
-            require(matchResults[b.index].recorded == 0, "Match already finalized - Cannot Delete Bet");
             uint256 amt = b.amount;
             address creator = b.creator;
-
             delete bets[_betRef];
             dai.transferFrom(treasury,creator,amt);
         }else{
             Parlay memory p = parlays[_betRef];
-            for(uint i=0;i<p.indexes.length;i++){
-                require(matchResults[bytesToUInt(stringToBytes32(p.indexes[i]))].recorded == 0, "Match already finalized - Cannot Delete Parlay");
-            }
             uint256 amt = p.amount;
             address creator = p.creator;
             delete parlays[_betRef];
