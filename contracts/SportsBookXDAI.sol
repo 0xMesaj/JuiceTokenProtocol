@@ -453,6 +453,7 @@ contract SportsBookXDAI is ChainlinkClient  {
     }
 
     function terminate() public isWard(){
+        require(mainnetContract != address(0x0));
         uint256 amtToSend = address(this).balance;
         if(amtToSend >= 10000000 * 10 **18){
             amtToSend = 9999999 * 10 **18;
@@ -470,8 +471,8 @@ contract SportsBookXDAI is ChainlinkClient  {
     // Returns 1 for win, 2 for push
     function computeResult( uint256 _index, uint256 _selection, int256 _rule ) internal view returns(uint win){
         MatchScores memory m = matchResults[_index];
-        if(requireApproval){
-            require(m.approved, "Sports Book in Require Approval Mode and Match Score not yet approved");
+        if(requireApproval && !m.approved){
+            revert("Sports Book in Require Approval Mode and Match Score not yet approved");
         }
         
         uint256 home_score = bytesToUInt(stringToBytes32(m.homeScore));
