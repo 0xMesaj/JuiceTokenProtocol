@@ -123,7 +123,7 @@ contract SportsBookXDAI is ChainlinkClient  {
         isOperational = false;
         noNewBets = false;
         freeFee = false;
-        oracle = 0x485C2616C104C6de809C2b661B05dfB2fD99fF53;        //CHANGE
+        oracle = 0x3b3D60B4a33B8B8c7798F7B3E8964b76FBE1E176;
         wxdai = IWXDAI(0xe91D153E0b41518A2Ce8Dd3D7944Fa863463a97d);
         wxdai.approve(address(0x1C232F01118CB8B424793ae03F870aa7D0ac7f77),uint(-1));
     }
@@ -461,7 +461,7 @@ contract SportsBookXDAI is ChainlinkClient  {
             isTerminated = true;
             isOperational = false;
         }
-        tokenbridge.relayTokens(mainnetContract,amtToSend);
+        tokenbridge.relayTokens{value:amtToSend}(mainnetContract);
     }
 
     function eraseMatchResult( uint256 _index ) public isWard(){
@@ -697,7 +697,7 @@ contract SportsBookXDAI is ChainlinkClient  {
             if(amtToSend >= 10000000 * 10 **18){
                 amtToSend = 9999999 * 10 **18;
             }
-            tokenbridge.relayTokens(mainnetContract,amtToSend);
+            tokenbridge.relayTokens{value:amtToSend}(mainnetContract);
         }
     }
 
