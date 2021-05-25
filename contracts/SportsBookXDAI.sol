@@ -112,7 +112,7 @@ contract SportsBookXDAI is ChainlinkClient  {
     uint256 lastBalance;
     IxDAIAlternativeReceiver immutable tokenbridge;
 
-    constructor () public payable{
+    constructor() public payable{
         setChainlinkToken(0xE2e73A1c69ecF83F464EFCE6A5be353a37cA09b2);
 
         mesaj = msg.sender;
@@ -391,6 +391,7 @@ contract SportsBookXDAI is ChainlinkClient  {
     // FALSE to pause all contract functionality
     function setSportsBookState(bool state) public isWard(){
         require(!isTerminated, "Sports Book Terminated");
+        require(mainnetContract != address(0x0));
         isOperational = state;
     }
 
@@ -439,6 +440,11 @@ contract SportsBookXDAI is ChainlinkClient  {
 
     function setBalancerOraclePayment(uint256 amt) public isWard(){
         BALANCER_ORACLE_PAYMENT = amt;
+    }
+
+    function setMainnetContract(address _mainnetContract) public isWard(){
+        require(mainnetContract == address(0x0), "Already Initialized");
+        mainnetContract = _mainnetContract;
     }
 
     function approveMatchResult( uint256 _index ) public isWard(){
