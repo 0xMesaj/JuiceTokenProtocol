@@ -180,7 +180,7 @@ contract WDAI is ERC20{
 
         treasuryProposalCount++;
 
-        Proposal storage p = treasuryProposals[liquidityProposalCount];
+        Proposal storage p = treasuryProposals[treasuryProposalCount];
         p.id = treasuryProposalCount;
         p.upgrade = _strategy;
         p.startBlock = _startBlock;
@@ -287,7 +287,5 @@ contract WDAI is ERC20{
     }
 
     receive() external payable { }
-
-
 
 }
