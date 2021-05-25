@@ -21,5 +21,4 @@ interface IJuiceVault {
     function getPooledJCE(uint256 _poolID) external view returns(uint256 pooledJCE);
     function totalAllocPoint() external view returns (uint256);
     function deposit(uint256 _pid, uint256 _amount) external;
-    function initializeTreasury( uint256 _amount ) external;
 }
