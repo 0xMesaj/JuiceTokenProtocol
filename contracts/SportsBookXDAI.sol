@@ -112,7 +112,7 @@ contract SportsBookXDAI is ChainlinkClient  {
     uint256 lastBalance;
     IxDAIAlternativeReceiver immutable tokenbridge;
 
-    constructor (IERC20 _DAI) public payable{
+    constructor () public payable{
         setChainlinkToken(0xE2e73A1c69ecF83F464EFCE6A5be353a37cA09b2);
 
         mesaj = msg.sender;
