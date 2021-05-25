@@ -28,6 +28,7 @@ contract JuiceTreasury {
 
     uint public proposalCount;
     uint public handlerProposalCount;
+    bool init;
     uint256 MIN_REQUIREMENT = uint(-1);
     address mesaj;
 
@@ -124,6 +125,7 @@ contract JuiceTreasury {
         uint256 split = _amount.div(2);  //Half goes to xDAI network
         //Must maintain reserve of initial funding
         MIN_REQUIREMENT = split;
+        init = true;
     }
 
     // Set allowance for strategy to new _amount
@@ -142,7 +144,7 @@ contract JuiceTreasury {
     function numberGoUp( uint _amt ) external isTreasurer(){
         uint256 check = DAI.balanceOf(address(this)).sub(_amt);
         require(check > MIN_REQUIREMENT, "Treasury below buying threshold");
-        
+        require(init, "Min Requirement not initialized");
         WDAI.deposit(_amt); // DAI -> wDAI (wrap)
 
         // Purchase JCE with wDAI
