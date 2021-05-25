@@ -616,7 +616,7 @@ contract SportsBookXDAI is ChainlinkClient  {
         _queryID = sendChainlinkRequestTo(oracle, req, PARLAY_ORACLE_PAYMENT);
     }
 
-    function balancePools() public isWard() returns (bytes32 _queryID) {
+    function balancePools(bool _payFeeWithLink) public payable isWard() returns (bytes32 _queryID) {
         require(block.timestamp >= lastBalance + 277);  // 1 HR assuming 13 sec block times
         if(!freeFee){
             if(_payFeeWithLink){
