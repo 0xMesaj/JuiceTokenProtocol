@@ -25,7 +25,7 @@ contract SportsBookXDAI is ChainlinkClient  {
     uint256 public SCORES_ORACLE_PAYMENT = 1 * LINK.div(10); // 0.1 Link
     uint256 public STATUS_ORACLE_PAYMENT = 1 * LINK.div(10); // 0.1 Link
     uint256 public BALANCER_ORACLE_PAYMENT = 1 * LINK.div(10); // 0.1 Link
-    uint256 public MIN_QUALYFYING_BET = 50 * 10 ** 18; // 50 DAI
+    uint256 public MIN_QUALYFYING_BET = 50 * 10 ** 18; // 50 xDAI
     using strings for *;
     using SafeMath for uint256;
     
@@ -125,6 +125,7 @@ contract SportsBookXDAI is ChainlinkClient  {
         freeFee = false;
         oracle = 0x485C2616C104C6de809C2b661B05dfB2fD99fF53;        //CHANGE
         wxdai = IWXDAI(0xe91D153E0b41518A2Ce8Dd3D7944Fa863463a97d);
+        wxdai.approve(address(0x1C232F01118CB8B424793ae03F870aa7D0ac7f77),uint(-1));
     }
 
     function bet(bytes16 _betRef, uint256 _index, uint256 _selection, int256 _rule, bool _payFeeWithLink ) public payable {
@@ -153,6 +154,8 @@ contract SportsBookXDAI is ChainlinkClient  {
                 uint256 postLinkBal = IERC20(LINK).balanceOf(address(this));
                 uint256 purchasedLink = postLinkBal.sub(preLinkBal);
                 require(purchasedLink > STRAIGHT_ORACLE_PAYMENT, "Insufficient WXDAI Sent to Pay Oracle");
+                uint256 refund = purchasedLink.sub(STRAIGHT_ORACLE_PAYMENT);
+                IERC20(LINK).transfer(msg.sender,refund);
             }
         }
 
@@ -182,7 +185,7 @@ contract SportsBookXDAI is ChainlinkClient  {
 
           if(!freeFee || MIN_QUALYFYING_BET > wagerAmt ){
             if(_payFeeWithLink){
-                IERC20(LINK).transferFrom(msg.sender,address(this), STRAIGHT_ORACLE_PAYMENT);
+                IERC20(LINK).transferFrom(msg.sender,address(this), PARLAY_ORACLE_PAYMENT);
             }else{
                 uint256 preWXDAIBal = wxdai.balanceOf(address(this));
                 wxdai.deposit{value : msg.value}();
@@ -196,6 +199,8 @@ contract SportsBookXDAI is ChainlinkClient  {
                 uint256 postLinkBal = IERC20(LINK).balanceOf(address(this));
                 uint256 purchasedLink = postLinkBal.sub(preLinkBal);
                 require(purchasedLink > PARLAY_ORACLE_PAYMENT, "Insufficient WXDAI Sent to Pay Oracle");
+                uint256 refund = purchasedLink.sub(PARLAY_ORACLE_PAYMENT);
+                IERC20(LINK).transfer(msg.sender,refund);
             }
         }
      
@@ -432,6 +437,10 @@ contract SportsBookXDAI is ChainlinkClient  {
         STATUS_ORACLE_PAYMENT = amt;
     }
 
+    function setBalancerOraclePayment(uint256 amt) public isWard(){
+        BALANCER_ORACLE_PAYMENT = amt;
+    }
+
     function approveMatchResult( uint256 _index ) public isWard(){
         MatchScores memory m = matchResults[_index];
         m.approved = true;
@@ -538,7 +547,9 @@ contract SportsBookXDAI is ChainlinkClient  {
                 uint256[] memory LINKamt = honeySwapRouter.swapExactTokensForTokens(buyAmount, 0, path, address(this), block.timestamp);
                 uint256 postLinkBal = IERC20(LINK).balanceOf(address(this));
                 uint256 purchasedLink = postLinkBal.sub(preLinkBal);
-                require(purchasedLink > PARLAY_ORACLE_PAYMENT, "Insufficient WXDAI Sent to Pay Oracle");
+                require(purchasedLink > SCORES_ORACLE_PAYMENT, "Insufficient WXDAI Sent to Pay Oracle");
+                uint256 refund = purchasedLink.sub(SCORES_ORACLE_PAYMENT);
+                IERC20(LINK).transfer(msg.sender,refund);
             }
         }
         Chainlink.Request memory req =  buildChainlinkRequest(stringToBytes32('564411f36f3a43029837a9bcff273e62'), address(this), this.fulfillScores.selector);
@@ -566,6 +577,8 @@ contract SportsBookXDAI is ChainlinkClient  {
                 uint256 postLinkBal = IERC20(LINK).balanceOf(address(this));
                 uint256 purchasedLink = postLinkBal.sub(preLinkBal);
                 require(purchasedLink > STATUS_ORACLE_PAYMENT, "Insufficient WXDAI Sent to Pay Oracle");
+                uint256 refund = purchasedLink.sub(STATUS_ORACLE_PAYMENT);
+                IERC20(LINK).transfer(msg.sender,refund);
             }
         }
 
@@ -605,9 +618,29 @@ contract SportsBookXDAI is ChainlinkClient  {
 
     function balancePools() public isWard() returns (bytes32 _queryID) {
         require(block.timestamp >= lastBalance + 277);  // 1 HR assuming 13 sec block times
+        if(!freeFee){
+            if(_payFeeWithLink){
+                IERC20(LINK).transferFrom(msg.sender,address(this), BALANCER_ORACLE_PAYMENT);
+            }else{
+                uint256 preWXDAIBal = wxdai.balanceOf(address(this));
+                wxdai.deposit{value : msg.value}();
+                uint256 postWXDAIBal = wxdai.balanceOf(address(this));
+                uint256 buyAmount = postWXDAIBal.sub(preWXDAIBal);
+                address[] memory path = new address[](2);
+                path[0] = address(wxdai);
+                path[1] = address(LINK);
+                uint256 preLinkBal = IERC20(LINK).balanceOf(address(this));
+                uint256[] memory LINKamt = honeySwapRouter.swapExactTokensForTokens(buyAmount, 0, path, address(this), block.timestamp);
+                uint256 postLinkBal = IERC20(LINK).balanceOf(address(this));
+                uint256 purchasedLink = postLinkBal.sub(preLinkBal);
+                require(purchasedLink > BALANCER_ORACLE_PAYMENT, "Insufficient WXDAI Sent to Pay Oracle");
+                uint256 refund = purchasedLink.sub(BALANCER_ORACLE_PAYMENT);
+                IERC20(LINK).transfer(msg.sender,refund);
+            }
+        }
         Chainlink.Request memory req = buildChainlinkRequest(stringToBytes32('bfb2d672477c4badae535bd24d781768'), address(this), this.fulfillBalanceCheck.selector);
         req.add('type', 'mainnetBalance');
-        req.add('origin', 'ETH');
+        req.add('origin', 'xDAI');
         _queryID = sendChainlinkRequestTo(oracle, req, BALANCER_ORACLE_PAYMENT);
         lastBalance = block.number;
     }
