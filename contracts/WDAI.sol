@@ -9,7 +9,7 @@ import "./SafeERC20.sol";
 import "./ERC20.sol";
 import "./interfaces/ILockedLiqCalculator.sol";
 import "./interfaces/IERC20.sol";
-import "./interfaces/IJuiceVault.sol";
+import "./interfaces/IJuiceTreasury.sol";
 import "./SafeMath.sol";
 
 contract WDAI is ERC20{
@@ -39,6 +39,7 @@ contract WDAI is ERC20{
     IERC20 JCE;
     IJuiceVault vault;
     bool initialized = false;
+    bool treasuryInit = false;
 
     struct Proposal {
         uint id;
@@ -114,12 +115,13 @@ contract WDAI is ERC20{
 
     function initializeTreasuryBalance(address _to) public quaestorOnly(){
         require (treasury[_to], "Error: Destination Address Not Approved Treasury");
-        
+        require(!treasuryInit, "Function already called");
         uint256 fundAmount = lockedLiqCalculator.calculateLockedwDAI(wrappedToken, address(this));
-        IJuiceVault(_to).initializeTreasury(fundAmount);
+        IJuiceTreasury(_to).initializeTreasury(fundAmount);
         if (fundAmount > 0) {
             wrappedToken.transferFrom(address(this), _to, fundAmount);
         }
+        treasuryInit = true;
     }
 
     function fund(address _to) public quaestorOnly() returns (uint256 fundAmount){
@@ -287,5 +289,4 @@ contract WDAI is ERC20{
     }
 
     receive() external payable { }
-
 }
