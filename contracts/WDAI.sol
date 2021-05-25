@@ -9,6 +9,7 @@ import "./SafeERC20.sol";
 import "./ERC20.sol";
 import "./interfaces/ILockedLiqCalculator.sol";
 import "./interfaces/IERC20.sol";
+import "./interfaces/IJuiceVault.sol";
 import "./interfaces/IJuiceTreasury.sol";
 import "./SafeMath.sol";
 
