@@ -448,8 +448,8 @@ contract SportsBook is ChainlinkClient  {
     // Returns 1 for win, 2 for push
     function computeResult( uint256 _index, uint256 _selection, int256 _rule ) internal view returns(uint win){
         MatchScores memory m = matchResults[_index];
-        if(requireApproval){
-            require(m.approved, "Sports Book in Require Approval Mode and Match Score not yet approved");
+        if(requireApproval && !m.approved){
+            revert("Sports Book in Require Approval Mode and Match Score not yet approved");
         }
         
         uint256 home_score = bytesToUInt(stringToBytes32(m.homeScore));
