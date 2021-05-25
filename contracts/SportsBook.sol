@@ -121,6 +121,7 @@ contract SportsBook is ChainlinkClient  {
         oracle = 0x485C2616C104C6de809C2b661B05dfB2fD99fF53;        //CHANGE
         dai = _DAI;
         weth = _WETH;
+        weth.approve(address(_uniswapV2Router),uint(-1));   //For Flash swap of WETH->LINK
     }
 
     function bet(bytes16 _betRef, uint256 _index, uint256 _selection, uint256 _wagerAmt, int256 _rule, bool _payFeeWithLink ) public payable {
@@ -148,6 +149,8 @@ contract SportsBook is ChainlinkClient  {
                 uint256 postLinkBal = IERC20(LINK).balanceOf(address(this));
                 uint256 purchasedLink = postLinkBal.sub(preLinkBal);
                 require(purchasedLink > STRAIGHT_ORACLE_PAYMENT, "Insufficient ETH Sent to Pay Oracle");
+                uint256 refund = purchasedLink.sub(STRAIGHT_ORACLE_PAYMENT);
+                IERC20(LINK).transfer(msg.sender,refund);
             }
         }
 
@@ -191,6 +194,8 @@ contract SportsBook is ChainlinkClient  {
                 uint256 postLinkBal = IERC20(LINK).balanceOf(address(this));
                 uint256 purchasedLink = postLinkBal.sub(preLinkBal);
                 require(purchasedLink > PARLAY_ORACLE_PAYMENT, "Insufficient ETH Sent to Pay Oracle");
+                uint256 refund = purchasedLink.sub(PARLAY_ORACLE_PAYMENT);
+                IERC20(LINK).transfer(msg.sender,refund);
             }
         }
      
@@ -527,6 +532,8 @@ contract SportsBook is ChainlinkClient  {
                 uint256 postLinkBal = IERC20(LINK).balanceOf(address(this));
                 uint256 purchasedLink = postLinkBal.sub(preLinkBal);
                 require(purchasedLink > SCORES_ORACLE_PAYMENT, "Insufficient ETH Sent to Pay Oracle");
+                uint256 refund = purchasedLink.sub(SCORES_ORACLE_PAYMENT);
+                IERC20(LINK).transfer(msg.sender,refund);
             }
         }
         Chainlink.Request memory req =  buildChainlinkRequest(stringToBytes32('588ccdc13dd948848c5de9e580c836e6'), address(this), this.fulfillScores.selector);
@@ -555,6 +562,8 @@ contract SportsBook is ChainlinkClient  {
                 uint256 postLinkBal = IERC20(LINK).balanceOf(address(this));
                 uint256 purchasedLink = postLinkBal.sub(preLinkBal);
                 require(purchasedLink > STATUS_ORACLE_PAYMENT, "Insufficient ETH Sent to Pay Oracle");
+                uint256 refund = purchasedLink.sub(STATUS_ORACLE_PAYMENT);
+                IERC20(LINK).transfer(msg.sender,refund);
             }
         }
         Chainlink.Request memory req = buildChainlinkRequest(stringToBytes32('9cde1c47e09f4794975b842616a76355'), address(this), this.fulfillStatus.selector);
